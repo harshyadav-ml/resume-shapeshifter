@@ -1,101 +1,157 @@
-import Image from "next/image";
+import Link from "next/link";
+import { ArrowRight, ScanSearch, Pencil, Download, CheckCircle } from "lucide-react";
+import type { Metadata } from "next";
 
-export default function Home() {
+export const metadata: Metadata = {
+  title: "Resume Shapeshifter — AI-Powered Resume Tailoring",
+  description:
+    "Paste your resume + job description. Get a tailored resume with match scores, gap analysis, and downloadable PDFs — all truthful.",
+};
+
+const FEATURES = [
+  {
+    icon: ScanSearch,
+    step: "01",
+    title: "Analyze",
+    description:
+      "Paste your resume and job description. Our AI parses both and scores your current match (0–100) with full explanations.",
+  },
+  {
+    icon: Pencil,
+    step: "02",
+    title: "Tailor",
+    description:
+      "Every resume bullet is rewritten to align with the JD — with confidence scores, risk flags, and the exact reason for each change.",
+  },
+  {
+    icon: Download,
+    step: "03",
+    title: "Export",
+    description:
+      "Download a clean tailored resume PDF or a side-by-side comparison proof artifact. You review and confirm every change first.",
+  },
+];
+
+const PRINCIPLES = [
+  "No fabricated experience, metrics, or certifications",
+  "Every rewrite has a stated reason",
+  "Risk-flagged bullets require your review",
+  "Side-by-side diff so you see every change",
+];
+
+export default function HomePage() {
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="https://nextjs.org/icons/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
-
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="https://nextjs.org/icons/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+    <main className="min-h-screen page-enter">
+      {/* Hero */}
+      <section className="relative overflow-hidden">
+        {/* Background gradient */}
+        <div className="absolute inset-0 -z-10">
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[900px] h-[600px] rounded-full bg-primary/5 blur-3xl" />
+          <div className="absolute top-20 left-1/4 w-[400px] h-[400px] rounded-full bg-accent/5 blur-3xl" />
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+
+        <div className="max-w-5xl mx-auto px-6 pt-20 pb-24 text-center">
+          {/* Badge */}
+          <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-4 py-1.5 text-sm font-medium text-primary mb-6">
+            <span className="h-2 w-2 rounded-full bg-primary animate-pulse" />
+            AI-powered resume tailoring · Truthful by design
+          </div>
+
+          {/* Headline */}
+          <h1 className="text-5xl sm:text-6xl md:text-7xl font-extrabold tracking-tight mb-6 leading-none">
+            Resume{" "}
+            <span className="gradient-text">Shapeshifter</span>
+          </h1>
+
+          <p className="text-xl text-muted-foreground max-w-2xl mx-auto mb-10 leading-relaxed">
+            Paste your resume and a job description. Get a fully tailored resume with
+            match scores, gap analysis, side-by-side diffs, and downloadable PDFs —
+            all grounded in the truth.
+          </p>
+
+          {/* CTA */}
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+            <Link
+              href="/input"
+              id="get-started-btn"
+              className="inline-flex items-center gap-2 px-8 py-4 rounded-xl bg-primary text-primary-foreground font-bold text-base hover:bg-primary/90 transition-all shadow-xl shadow-primary/20 hover:shadow-primary/30 hover:-translate-y-0.5"
+            >
+              Get Started
+              <ArrowRight className="h-5 w-5" />
+            </Link>
+            <a
+              href="/input?demo=true"
+              id="view-demo-btn"
+              className="inline-flex items-center gap-2 px-8 py-4 rounded-xl border border-border bg-card text-foreground font-semibold text-base hover:border-primary/40 hover:bg-muted/50 transition-all"
+            >
+              View Demo
+            </a>
+          </div>
+        </div>
+      </section>
+
+      {/* How it works */}
+      <section className="max-w-5xl mx-auto px-6 py-16">
+        <div className="text-center mb-12">
+          <h2 className="text-3xl font-bold mb-3">How It Works</h2>
+          <p className="text-muted-foreground">
+            Three steps from raw resume to tailored PDF.
+          </p>
+        </div>
+
+        <div className="grid md:grid-cols-3 gap-6">
+          {FEATURES.map(({ icon: Icon, step, title, description }) => (
+            <div
+              key={step}
+              className="rounded-2xl border bg-card p-6 relative overflow-hidden group hover:border-primary/40 transition-all hover:-translate-y-1 hover:shadow-lg hover:shadow-primary/5"
+            >
+              {/* Step number (background) */}
+              <span className="absolute top-4 right-5 text-6xl font-black text-muted/25 select-none group-hover:text-primary/10 transition-colors">
+                {step}
+              </span>
+
+              <div className="h-11 w-11 rounded-xl bg-primary/10 flex items-center justify-center mb-4">
+                <Icon className="h-5 w-5 text-primary" />
+              </div>
+              <h3 className="font-bold text-lg mb-2">{title}</h3>
+              <p className="text-sm text-muted-foreground leading-relaxed">{description}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Truthfulness section */}
+      <section className="max-w-5xl mx-auto px-6 py-12 mb-16">
+        <div className="rounded-2xl border bg-gradient-to-br from-primary/5 via-accent/5 to-transparent p-8">
+          <div className="flex flex-col md:flex-row items-start gap-8">
+            <div className="flex-1">
+              <h2 className="text-2xl font-bold mb-3">
+                Truthfulness is non-negotiable
+              </h2>
+              <p className="text-muted-foreground leading-relaxed mb-6">
+                Resume Shapeshifter will never fabricate experience, invent metrics,
+                or add certifications you don&apos;t have. Every suggestion is grounded
+                in your actual resume content — with explicit warnings when anything
+                needs your verification.
+              </p>
+              <Link
+                href="/input"
+                className="inline-flex items-center gap-2 text-sm font-semibold text-primary hover:underline"
+              >
+                Start tailoring your resume <ArrowRight className="h-4 w-4" />
+              </Link>
+            </div>
+            <ul className="space-y-2.5 flex-1">
+              {PRINCIPLES.map((p) => (
+                <li key={p} className="flex items-start gap-2.5 text-sm">
+                  <CheckCircle className="h-4 w-4 text-emerald-500 mt-0.5 shrink-0" />
+                  {p}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </section>
+    </main>
   );
 }

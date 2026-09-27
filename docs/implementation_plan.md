@@ -20,7 +20,7 @@ gantt
     JD + Resume Parsing Prompts        :p2b, after p2a, 2d
     Scoring + Tailoring Prompts        :p2c, after p2b, 2d
     section Phase 3
-    Tailored Resume PDF                :p3a, 2026-10-15, 2d
+    Tailored Resume PDF             Implement phase 2 as per the [implementation_plan.md](file;file:///Users/harsh/Downloads/resume-shapeshifter/docs/implementation_plan.md)    :p3a, 2026-10-15, 2d
     Side-by-side Comparison PDF        :p3b, after p3a, 2d
     Export API Routes                  :p3c, after p3b, 1d
     section Phase 4

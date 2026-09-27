@@ -2,26 +2,229 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ============================================================
+   Design Tokens — Resume Shapeshifter
+   ============================================================ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* --- Brand Colors --- */
+  --color-brand-50:  220 100% 97%;
+  --color-brand-100: 220 96%  92%;
+  --color-brand-200: 220 90%  84%;
+  --color-brand-300: 220 85%  72%;
+  --color-brand-400: 220 82%  60%;
+  --color-brand-500: 220 80%  50%;   /* Primary */
+  --color-brand-600: 220 78%  42%;
+  --color-brand-700: 220 74%  34%;
+  --color-brand-800: 220 68%  26%;
+  --color-brand-900: 220 62%  18%;
+
+  /* --- Accent (Violet) --- */
+  --color-accent-400: 265 80%  65%;
+  --color-accent-500: 265 78%  55%;  /* Accent */
+  --color-accent-600: 265 72%  46%;
+
+  /* --- Success / Risk / Warning --- */
+  --color-success-400: 142 70%  50%;
+  --color-success-500: 142 72%  42%;
+  --color-warning-400: 37  92%  58%;
+  --color-warning-500: 37  90%  50%;
+  --color-danger-400:  0   84%  62%;
+  --color-danger-500:  0   82%  54%;
+
+  /* --- Neutrals (light mode) --- */
+  --background:       0 0%   100%;
+  --foreground:       220 20%  10%;
+  --card:             220 30%  98%;
+  --card-foreground:  220 20%  10%;
+  --popover:          0 0%   100%;
+  --popover-foreground: 220 20% 10%;
+  --primary:          220 80%  50%;
+  --primary-foreground: 0 0%  100%;
+  --secondary:        220 20%  93%;
+  --secondary-foreground: 220 20% 20%;
+  --muted:            220 20%  95%;
+  --muted-foreground: 220 14%  50%;
+  --accent:           265 78%  55%;
+  --accent-foreground: 0 0%   100%;
+  --destructive:      0 84%   60%;
+  --destructive-foreground: 0 0% 100%;
+  --border:           220 20%  88%;
+  --input:            220 20%  88%;
+  --ring:             220 80%  50%;
+  --radius:           0.625rem;
+
+  /* --- Sidebar --- */
+  --sidebar-background: 220 30% 97%;
+  --sidebar-foreground: 220 20% 20%;
+  --sidebar-primary: 220 80% 50%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 220 20% 93%;
+  --sidebar-accent-foreground: 220 20% 20%;
+  --sidebar-border: 220 20% 88%;
+  --sidebar-ring: 220 80% 50%;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+.dark {
+  /* --- Neutrals (dark mode) --- */
+  --background:       222 47%  8%;
+  --foreground:       220 20%  93%;
+  --card:             222 40%  11%;
+  --card-foreground:  220 20%  93%;
+  --popover:          222 40%  10%;
+  --popover-foreground: 220 20% 93%;
+  --primary:          220 80%  60%;
+  --primary-foreground: 222 47% 8%;
+  --secondary:        222 30%  16%;
+  --secondary-foreground: 220 20% 80%;
+  --muted:            222 30%  15%;
+  --muted-foreground: 220 14%  55%;
+  --accent:           265 78%  65%;
+  --accent-foreground: 222 47% 8%;
+  --destructive:      0 72%   50%;
+  --destructive-foreground: 0 0% 100%;
+  --border:           222 28%  20%;
+  --input:            222 28%  20%;
+  --ring:             220 80%  60%;
+
+  /* --- Sidebar --- */
+  --sidebar-background: 222 40% 9%;
+  --sidebar-foreground: 220 20% 80%;
+  --sidebar-primary: 220 80% 60%;
+  --sidebar-primary-foreground: 222 47% 8%;
+  --sidebar-accent: 222 30% 16%;
+  --sidebar-accent-foreground: 220 20% 80%;
+  --sidebar-border: 222 28% 18%;
+  --sidebar-ring: 220 80% 60%;
+}
+
+/* ============================================================
+   Base Styles
+   ============================================================ */
+* {
+  box-sizing: border-box;
+  border-color: hsl(var(--border));
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: var(--font-inter, 'Inter', system-ui, sans-serif);
+  font-feature-settings: "rlig" 1, "calt" 1;
+  line-height: 1.6;
+  min-height: 100vh;
 }
 
-@layer utilities {
-  .text-balance {
-    text-wrap: balance;
+/* ============================================================
+   Custom Utilities
+   ============================================================ */
+
+/* Gradient text */
+.gradient-text {
+  background: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--accent)) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Glass card */
+.glass-card {
+  background: rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.dark .glass-card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Score ring animation */
+@keyframes score-fill {
+  from { stroke-dashoffset: 565; }
+  to   { stroke-dashoffset: var(--target-offset); }
+}
+
+.score-ring-circle {
+  animation: score-fill 1.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  transition: stroke-dashoffset 1.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Counter animation */
+@keyframes count-up {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.animate-count {
+  animation: count-up 0.4s ease-out forwards;
+}
+
+/* Page transitions */
+@keyframes fade-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
   }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.page-enter {
+  animation: fade-slide-in 0.35s ease-out forwards;
+}
+
+/* Tag / chip */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.5;
+  transition: all 0.15s ease;
+}
+
+/* Bullet card highlight */
+.bullet-card-changed {
+  border-left: 3px solid hsl(var(--primary));
+  background: hsl(var(--primary) / 0.04);
+}
+
+.bullet-card-risk {
+  border-left: 3px solid hsl(var(--warning-400, 37 92% 58%));
+  background: hsl(37 92% 58% / 0.05);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.5);
+}
+
+/* Focus ring */
+:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
 }

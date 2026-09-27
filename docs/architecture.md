@@ -1,6 +1,6 @@
 # Resume Shapeshifter — System Architecture
 
-> **Version:** 1.0 | **Date:** September 2026 | **Stack:** Next.js · FastAPI · OpenAI · React PDF
+> **Version:** 1.1 | **Date:** September 2026 | **Stack:** Next.js · Groq (Llama 3.3 70B) · React PDF
 
 ---
 
@@ -62,13 +62,12 @@ graph TB
         R6["/api/export-pdf"]
     end
 
-    subgraph LLMService["🧠 LLM Service (FastAPI / Python)"]
+    subgraph LLMService["🧠 LLM Service (Next.js API Routes)"]
         P1["JD Extraction Prompt"]
         P2["Resume Parser Prompt"]
         P3["Match Scoring Prompt"]
         P4["Bullet Rewriter Prompt"]
         P5["Gap Analysis Prompt"]
-        P6["Resume Assembly Prompt"]
     end
 
     subgraph DocParsing["📄 Document Parsing (Python)"]
@@ -87,8 +86,8 @@ graph TB
         S2["SQLite / Supabase (Persistent)"]
     end
 
-    subgraph OpenAI["☁️ OpenAI API"]
-        OA["GPT-4o / GPT-4-turbo\n(Structured JSON Output)"]
+    subgraph GroqCloud["⚡ Groq Cloud API"]
+        GC["Llama 3.3 70B Versatile\n(JSON Mode · ~1200 tok/s)"]
     end
 
     UI -->|"REST / JSON"| NextAPI
@@ -96,7 +95,7 @@ graph TB
     NextAPI --> DocParsing
     NextAPI --> PDFGen
     NextAPI --> Storage
-    LLMService --> OpenAI
+    LLMService --> GroqCloud
 ```
 
 ---
@@ -129,9 +128,12 @@ graph TB
 
 | Technology | Role |
 |---|---|
-| **OpenAI GPT-4o** | JD extraction, scoring, bullet rewriting, gap analysis |
-| **Structured Outputs (`response_format: json_schema`)** | Enforce strict JSON from every prompt |
+| **Groq Cloud** (`groq-sdk`) | High-speed inference engine (~1200 tok/s) |
+| **Llama 3.3 70B Versatile** | JD extraction, scoring, bullet rewriting, gap analysis |
+| **JSON mode** (`response_format: { type: "json_object" }`) | Enforce JSON output from every prompt |
 | **Separate prompt files** | One file per concern, versioned independently |
+
+> **Why Groq over OpenAI?** Groq's LPU hardware delivers ~10× faster inference than GPU-based providers. A full tailoring run with 8–12 bullets completes in seconds rather than 30–60s. The `llama-3.3-70b-versatile` model provides GPT-4-class reasoning at a fraction of the cost, with generous free-tier limits (30 RPM / 15K TPM on free plan).
 
 ### 3.4 Storage
 
@@ -271,7 +273,7 @@ backend/
 │   ├── tailoring.py
 │   └── gaps.py
 └── utils/
-    ├── openai_client.py        ← Structured output wrapper
+    ├── groq_client.py          ← Groq SDK wrapper with retry + JSON mode
     ├── json_validator.py       ← JSON schema enforcement
     └── text_utils.py
 ```
@@ -295,25 +297,29 @@ Each concern gets its **own prompt file**, independently testable and versionabl
 
 ### 6.2 Structured Output Pattern
 
-All prompts request **strict JSON** via OpenAI's `response_format`:
+All prompts request **JSON mode** via Groq's OpenAI-compatible API:
 
-```python
-response = client.chat.completions.create(
-    model="gpt-4o",
-    messages=[
-        {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": user_prompt}
-    ],
-    response_format={
-        "type": "json_schema",
-        "json_schema": {
-            "name": "match_score",
-            "strict": True,
-            "schema": MatchScoreSchema.model_json_schema()
-        }
-    }
-)
+```typescript
+// lib/groq.ts — server-side only (Next.js API route)
+import Groq from "groq-sdk";
+
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+
+const response = await groq.chat.completions.create({
+  model: "llama-3.3-70b-versatile",
+  messages: [
+    { role: "system", content: SYSTEM_PROMPT },
+    { role: "user", content: userPrompt },
+  ],
+  response_format: { type: "json_object" },
+  temperature: 0.2,
+});
+
+const parsed = JSON.parse(response.choices[0].message.content!);
+const validated = SomeZodSchema.parse(parsed); // Zod runtime validation
 ```
+
+> **Note:** Groq uses `json_object` mode (not `json_schema`). The LLM is instructed to produce JSON matching a schema described in the system prompt. Zod validates the output on the TypeScript side; invalid responses trigger a retry with the validation error injected into the next attempt.
 
 ### 6.3 Mandatory LLM Instructions (All Prompts)
 
@@ -543,7 +549,7 @@ sequenceDiagram
     participant FE as Next.js Frontend
     participant API as Next.js API (/api/tailor-run)
     participant PY as FastAPI (Python)
-    participant LLM as OpenAI API
+    participant LLM as Groq Cloud (Llama 3.3 70B)
 
     User->>FE: Paste resume + JD → Click Analyze
     FE->>API: POST /api/tailor-run { resumeRaw, jdRaw }
@@ -678,7 +684,7 @@ resume-shapeshifter/
 │   │   ├── tailoring.py
 │   │   └── gaps.py
 │   └── utils/
-│       ├── openai_client.py
+│       ├── groq_client.py
 │       ├── json_validator.py
 │       └── text_utils.py
 │
@@ -693,7 +699,7 @@ resume-shapeshifter/
 │   ├── problemStatement.md
 │   └── architecture.md             # This file
 │
-├── .env.local                      # OPENAI_API_KEY, DB_URL, PYTHON_API_URL
+├── .env.local                      # GROQ_API_KEY, DB_URL
 ├── next.config.ts
 ├── tailwind.config.ts
 ├── tsconfig.json
@@ -911,7 +917,7 @@ A gap is marked `canSafelyAdd: true` only if:
 
 | Risk | Likelihood | Mitigation |
 |---|---|---|
-| OpenAI rate limits during demo | Low | Cache last successful run; add retry with backoff |
+| Groq rate limits during demo | Medium | Free tier: 30 RPM / 15K TPM. Batch bullets in groups of 3; add retry with backoff |
 | Playwright PDF crashes on large resumes | Low | Page size limit + timeout fallback |
 | Python service cold start in production | Medium | Keep-alive ping; containerize with Docker |
 
@@ -921,8 +927,7 @@ A gap is marked `canSafelyAdd: true` only if:
 
 ```bash
 # .env.local
-OPENAI_API_KEY=sk-...
-PYTHON_API_URL=http://localhost:8000   # FastAPI service
+GROQ_API_KEY=gsk_...                   # Groq Cloud API key
 DATABASE_URL=file:./dev.db             # SQLite (dev)
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
@@ -933,7 +938,8 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 |---|---|---|
 | Frontend framework | Next.js 14 (App Router) | Unified API routes + SSR |
 | Separate Python service | Yes | Superior PDF/DOCX parsing libraries |
-| LLM structured output | OpenAI `json_schema` mode | Eliminates JSON parsing errors |
+| LLM provider | Groq Cloud (Llama 3.3 70B) | ~10× faster inference, generous free tier, GPT-4-class quality |
+| LLM structured output | Groq `json_object` mode + Zod validation | JSON mode + runtime schema enforcement |
 | PDF for comparison | Playwright | Pixel-perfect HTML→PDF, handles complex layouts |
 | PDF for tailored resume | React PDF | Browser-side, no server needed |
 | State management | Context + useReducer | Simple enough for MVP, no Redux overhead |
