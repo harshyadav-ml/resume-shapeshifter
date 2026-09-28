@@ -59,31 +59,25 @@ graph TB
         R3["/api/score"]
         R4["/api/tailor"]
         R5["/api/gaps"]
-        R6["/api/export-pdf"]
+        O["/api/tailor-run"]
     end
 
-    subgraph LLMService["🧠 LLM Service (Next.js API Routes)"]
-        P1["JD Extraction Prompt"]
-        P2["Resume Parser Prompt"]
-        P3["Match Scoring Prompt"]
-        P4["Bullet Rewriter Prompt"]
-        P5["Gap Analysis Prompt"]
-    end
-
-    subgraph DocParsing["📄 Document Parsing (Python)"]
-        DP1["PDF Parser (pdf-parse / pdfminer)"]
-        DP2["DOCX Parser (mammoth / python-docx)"]
-        DP3["Plain Text Normalizer"]
+    subgraph LLMService["🧠 LLM Integration (lib/groq.ts)"]
+        P1["JD Extraction"]
+        P2["Resume Parser"]
+        P3["Match Scoring"]
+        P4["Bullet Rewriter"]
+        P5["Gap Analysis"]
     end
 
     subgraph PDFGen["🖨️ PDF Generator"]
         PG1["Tailored Resume PDF\n(React PDF / @react-pdf/renderer)"]
-        PG2["Side-by-Side Comparison PDF\n(Playwright / Puppeteer)"]
+        PG2["Side-by-Side Comparison\n(React PDF or HTML Print)"]
     end
 
     subgraph Storage["🗄️ Storage Layer"]
         S1["Session Storage (MVP)"]
-        S2["SQLite / Supabase (Persistent)"]
+        S2["SQLite / Prisma (Persistent)"]
     end
 
     subgraph GroqCloud["⚡ Groq Cloud API"]
@@ -92,7 +86,6 @@ graph TB
 
     UI -->|"REST / JSON"| NextAPI
     NextAPI --> LLMService
-    NextAPI --> DocParsing
     NextAPI --> PDFGen
     NextAPI --> Storage
     LLMService --> GroqCloud
@@ -118,11 +111,9 @@ graph TB
 
 | Technology | Role | Rationale |
 |---|---|---|
-| **Next.js API Routes** | Orchestration layer | Unified deployment; calls Python service |
-| **FastAPI (Python)** | LLM + Document parsing service | Superior PDF/DOCX parsing ecosystem |
-| **pdf-parse / pdfminer** | PDF text extraction | Handles most single-column resumes |
-| **mammoth / python-docx** | DOCX parsing | Structured section extraction |
-| **Playwright / Puppeteer** | Side-by-side comparison PDF | Pixel-perfect HTML→PDF conversion |
+| **Next.js API Routes** | Orchestration layer | Unified deployment; handles all LLM orchestration natively |
+| **Zod** | Schema validation | Native TypeScript runtime validation ensuring strict JSON structure |
+| **React PDF (`@react-pdf/renderer`)** | Client-side PDF Generation | Generates both ATS resume and comparison reports without Python dependencies |
 
 ### 3.3 LLM & AI
 
@@ -210,22 +201,17 @@ interface AppState {
 graph LR
     subgraph NextAPI["Next.js API Routes"]
         O["Orchestrator\n/api/tailor-run"]
-    end
-
-    subgraph FastAPI["FastAPI (Python)"]
-        A["Resume Parser Service"]
-        B["JD Parser Service"]
-        C["Scoring Service"]
-        D["Tailoring Service"]
-        E["Gap Analysis Service"]
-        F["PDF Generator Service"]
+        A["/api/parse-resume"]
+        B["/api/parse-jd"]
+        C["/api/score"]
+        D["/api/tailor"]
+        E["/api/gaps"]
     end
 
     O --> A & B
-    A & B --> C
-    C --> D
-    D --> E
-    E --> F
+    O --> C
+    O --> D
+    O --> E
 ```
 
 ### 5.2 Orchestration Flow (Single Run)
@@ -233,50 +219,19 @@ graph LR
 The `/api/tailor-run` Next.js route acts as the orchestrator for a complete tailoring run:
 
 1. **Receive** `{ resumeRaw, jdRaw }` from client.
-2. **Call** `POST /parse/resume` → `ResumeProfile`
-3. **Call** `POST /parse/jd` → `JobDescriptionProfile`
-4. **Call** `POST /score` → `MatchScore` (original)
-5. **Call** `POST /tailor` → `TailoredResume`
-6. **Call** `POST /gaps` → `ResumeGap[]`
-7. **Call** `POST /score` again with tailored content → `MatchScore` (tailored)
-8. **Assemble** `TailoringRun` and return to client.
+2. **Call internally** parsing logic → `ResumeProfile` & `JobDescriptionProfile`
+3. **Call internally** scoring logic → `MatchScore` (original)
+4. **Call internally** tailoring logic → `TailoredResume`
+5. **Call internally** gap logic → `ResumeGap[]`
+6. **Call internally** scoring logic again → `MatchScore` (tailored)
+7. **Assemble** `TailoringRun` and return to client.
 
-### 5.3 FastAPI Service Layout
+### 5.3 LLM Client (lib/groq.ts)
 
-```
-backend/
-├── main.py                     ← FastAPI app entry point
-├── routers/
-│   ├── parse.py                ← /parse/resume, /parse/jd
-│   ├── score.py                ← /score
-│   ├── tailor.py               ← /tailor
-│   ├── gaps.py                 ← /gaps
-│   └── export.py               ← /export/pdf
-├── services/
-│   ├── resume_parser.py        ← pdf-parse / mammoth / text normalization
-│   ├── jd_parser.py            ← text normalization + LLM extraction
-│   ├── scoring.py              ← LLM scoring + heuristic layer
-│   ├── tailoring.py            ← LLM bullet rewriting
-│   ├── gap_analysis.py         ← LLM gap detection
-│   └── pdf_generator.py        ← Playwright HTML→PDF
-├── prompts/
-│   ├── jd_extraction.py
-│   ├── resume_parser.py
-│   ├── match_scoring.py
-│   ├── bullet_rewriter.py
-│   ├── gap_analysis.py
-│   └── resume_assembly.py
-├── schemas/
-│   ├── resume.py               ← Pydantic models
-│   ├── jd.py
-│   ├── scoring.py
-│   ├── tailoring.py
-│   └── gaps.py
-└── utils/
-    ├── groq_client.py          ← Groq SDK wrapper with retry + JSON mode
-    ├── json_validator.py       ← JSON schema enforcement
-    └── text_utils.py
-```
+A singleton Groq client is used across all API routes. It features:
+- Exponential backoff and 429 rate-limit handling (respecting `Retry-After`).
+- `json_object` mode enforcing structured outputs.
+- Zod validation with error injection on retry (up to 3 attempts).
 
 ---
 
@@ -528,16 +483,9 @@ interface ExportedDocument {
 // Response: PDF binary stream (Content-Type: application/pdf)
 ```
 
-### 8.3 FastAPI Internal Routes (Python)
+### 8.3 Internal Routing
 
-| Method | Route | Description |
-|---|---|---|
-| `POST` | `/parse/resume` | Extract `ResumeProfile` from raw text/file |
-| `POST` | `/parse/jd` | Extract `JobDescriptionProfile` |
-| `POST` | `/score` | Return `MatchScore` |
-| `POST` | `/tailor` | Return `TailoredResume` |
-| `POST` | `/gaps` | Return `ResumeGap[]` |
-| `POST` | `/export/comparison-pdf` | Return comparison PDF bytes |
+All operations previously delegated to Python are now handled by native Next.js API routes under `app/api/`. These routes can be called by the frontend individually or orchestrated via `/api/tailor-run`.
 
 ---
 
@@ -548,53 +496,33 @@ sequenceDiagram
     actor User
     participant FE as Next.js Frontend
     participant API as Next.js API (/api/tailor-run)
-    participant PY as FastAPI (Python)
-    participant LLM as Groq Cloud (Llama 3.3 70B)
+    participant Groq as Groq Cloud (Llama 3.3 70B)
 
     User->>FE: Paste resume + JD → Click Analyze
     FE->>API: POST /api/tailor-run { resumeRaw, jdRaw }
 
-    API->>PY: POST /parse/resume
-    PY->>LLM: Resume parser prompt
-    LLM-->>PY: ResumeProfile JSON
-    PY-->>API: ResumeProfile
+    API->>Groq: Parse Resume (JSON Mode)
+    Groq-->>API: ResumeProfile JSON
 
-    API->>PY: POST /parse/jd
-    PY->>LLM: JD extraction prompt
-    LLM-->>PY: JobDescriptionProfile JSON
-    PY-->>API: JobDescriptionProfile
+    API->>Groq: Parse JD (JSON Mode)
+    Groq-->>API: JobDescriptionProfile JSON
 
-    API->>PY: POST /score (original)
-    PY->>LLM: Match scoring prompt
-    LLM-->>PY: MatchScore JSON
-    PY-->>API: MatchScore (original)
+    API->>Groq: Score Match (original)
+    Groq-->>API: MatchScore JSON
 
-    API->>PY: POST /tailor
-    loop Per bullet
-        PY->>LLM: Bullet rewriter prompt
-        LLM-->>PY: RewrittenBullet JSON
+    loop Per bullet (with 50ms stagger)
+        API->>Groq: Rewrite bullet
+        Groq-->>API: RewrittenBullet JSON
     end
-    PY-->>API: TailoredResume
 
-    API->>PY: POST /gaps
-    PY->>LLM: Gap analysis prompt
-    LLM-->>PY: ResumeGap[] JSON
-    PY-->>API: ResumeGap[]
+    API->>Groq: Gap analysis
+    Groq-->>API: ResumeGap[] JSON
 
-    API->>PY: POST /score (tailored)
-    PY->>LLM: Match scoring prompt
-    LLM-->>PY: MatchScore JSON
-    PY-->>API: MatchScore (tailored)
+    API->>Groq: Score Match (tailored)
+    Groq-->>API: MatchScore JSON
 
     API-->>FE: TailoringRun { all data }
     FE->>User: Show analysis results + side-by-side
-
-    User->>FE: Click Export PDF
-    FE->>API: POST /api/export-pdf { runId, type: "comparison" }
-    API->>PY: POST /export/comparison-pdf
-    PY-->>API: PDF bytes
-    API-->>FE: PDF binary stream
-    FE->>User: Download PDF
 ```
 
 ---
@@ -654,39 +582,6 @@ resume-shapeshifter/
 ├── types/
 │   └── index.ts                    # All TypeScript interfaces
 │
-├── backend/                        # FastAPI Python service
-│   ├── main.py
-│   ├── requirements.txt
-│   ├── routers/
-│   │   ├── parse.py
-│   │   ├── score.py
-│   │   ├── tailor.py
-│   │   ├── gaps.py
-│   │   └── export.py
-│   ├── services/
-│   │   ├── resume_parser.py
-│   │   ├── jd_parser.py
-│   │   ├── scoring.py
-│   │   ├── tailoring.py
-│   │   ├── gap_analysis.py
-│   │   └── pdf_generator.py
-│   ├── prompts/
-│   │   ├── jd_extraction.py
-│   │   ├── resume_parser.py
-│   │   ├── match_scoring.py
-│   │   ├── bullet_rewriter.py
-│   │   ├── gap_analysis.py
-│   │   └── resume_assembly.py
-│   ├── schemas/
-│   │   ├── resume.py
-│   │   ├── jd.py
-│   │   ├── scoring.py
-│   │   ├── tailoring.py
-│   │   └── gaps.py
-│   └── utils/
-│       ├── groq_client.py
-│       ├── json_validator.py
-│       └── text_utils.py
 │
 ├── prisma/
 │   └── schema.prisma               # DB schema (SQLite/Supabase)
@@ -768,14 +663,14 @@ model ExportedDocument {
 
 ### 12.2 Document 2 — Side-by-Side Comparison PDF
 
-**Tool:** Playwright (headless Chromium, server-side Python)
+**Tool:** `@react-pdf/renderer` or Browser Print API
 
 Strategy:
-1. Python renders an HTML template with two columns: original (left) and tailored (right).
+1. Client renders a comparison view with two columns: original (left) and tailored (right).
 2. Changed bullets are highlighted in the tailored column.
 3. Header shows job title, company, original score, and tailored score.
 4. Footer includes gap analysis summary and truthfulness disclaimer.
-5. Playwright prints the page to PDF (`page.pdf()`), returned as bytes.
+5. The document is generated locally on the client to avoid backend PDF overhead.
 
 ### 12.3 Comparison PDF Sections
 
@@ -823,7 +718,7 @@ This is a first-class concern, not an afterthought.
 
 ```
 Layer 1 — LLM Instructions:  System prompt enforces truthfulness rules.
-Layer 2 — JSON Schema:       Zod/Pydantic validates every LLM output.
+Layer 2 — JSON Schema:       Zod validates every LLM output natively in TS.
 Layer 3 — Risk Flags:        Each RewrittenBullet carries riskFlag + confidence.
 Layer 4 — UI Disclosure:     Risk-flagged bullets shown with ⚠️ badge.
 Layer 5 — User Review:       User must confirm changes before export.
@@ -850,18 +745,19 @@ A gap is marked `canSafelyAdd: true` only if:
 
 ### Phase 2 — LLM Integration (Week 2)
 
-- [ ] FastAPI service with all 5 prompt routes.
+- [ ] Next.js API route orchestration (`/api/tailor-run`).
+- [ ] Groq client wrapper (`lib/groq.ts`) with retry and backoff.
+- [ ] Zod validation schemas (`lib/schemas.ts`).
 - [ ] JD extraction prompt → `JobDescriptionProfile`.
 - [ ] Resume parser prompt → `ResumeProfile`.
 - [ ] Match scoring prompt → `MatchScore`.
 - [ ] Bullet rewriter prompt → `TailoredResume`.
 - [ ] Gap analysis prompt → `ResumeGap[]`.
-- [ ] Zod validation on all LLM outputs.
 
 ### Phase 3 — PDF Export (Week 3)
 
 - [ ] Tailored resume PDF with `@react-pdf/renderer`.
-- [ ] Comparison PDF with Playwright.
+- [ ] Comparison PDF with React PDF.
 - [ ] Highlighted changed bullets.
 - [ ] Gap analysis section in comparison PDF.
 - [ ] Download buttons.
@@ -894,7 +790,6 @@ A gap is marked `canSafelyAdd: true` only if:
 |---|---|---|
 | Multi-column PDF parses out of order | High | Warn users; recommend plain text for MVP |
 | Non-standard section headers | Medium | LLM-based fallback section classifier |
-| DOCX formatting artifacts | Medium | mammoth strip-tags mode; preview before processing |
 
 ### 15.2 LLM Risks
 
@@ -917,9 +812,8 @@ A gap is marked `canSafelyAdd: true` only if:
 
 | Risk | Likelihood | Mitigation |
 |---|---|---|
-| Groq rate limits during demo | Medium | Free tier: 30 RPM / 15K TPM. Batch bullets in groups of 3; add retry with backoff |
-| Playwright PDF crashes on large resumes | Low | Page size limit + timeout fallback |
-| Python service cold start in production | Medium | Keep-alive ping; containerize with Docker |
+| Groq rate limits during demo | Medium | Free tier: 30 RPM / 15K TPM. Add delay between bullet requests; retry with backoff |
+| Vercel Serverless timeout | Medium | Orchestration route may hit 15s/60s limits. Use Edge API routes or stream if needed |
 
 ---
 
@@ -937,14 +831,14 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 | Decision | Choice | Rationale |
 |---|---|---|
 | Frontend framework | Next.js 14 (App Router) | Unified API routes + SSR |
-| Separate Python service | Yes | Superior PDF/DOCX parsing libraries |
+| Separate Python service | No | Minimized complexity, pure Node.js/TS architecture |
 | LLM provider | Groq Cloud (Llama 3.3 70B) | ~10× faster inference, generous free tier, GPT-4-class quality |
 | LLM structured output | Groq `json_object` mode + Zod validation | JSON mode + runtime schema enforcement |
-| PDF for comparison | Playwright | Pixel-perfect HTML→PDF, handles complex layouts |
+| PDF for comparison | React PDF | Client-side generation, no backend headless browser required |
 | PDF for tailored resume | React PDF | Browser-side, no server needed |
 | State management | Context + useReducer | Simple enough for MVP, no Redux overhead |
 | Database | SQLite → Supabase | Start local, migrate to cloud when needed |
-| Validation | Zod (TS) + Pydantic (Python) | Runtime safety at every boundary |
+| Validation | Zod (TS) | Runtime safety at the Next.js API boundary |
 
 ---
 

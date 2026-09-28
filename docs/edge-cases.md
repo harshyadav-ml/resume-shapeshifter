@@ -57,7 +57,7 @@
 
 ## Phase 2 — LLM Integration (Week 2)
 
-> Covers: FastAPI prompt routes, all 5 prompts, Zod validation.
+> Covers: Next.js API routes, Groq LLM integration, all 5 prompts, Zod validation.
 
 ### 2.1 Resume Parser (`/parse/resume`)
 
@@ -151,20 +151,16 @@
 | `tailoredSummary` is empty string | Summary section renders blank white space | Omit summary section from PDF if `tailoredSummary.length === 0` |
 | Date fields are empty strings | Work dates column is blank | Render `"—"` for missing dates |
 
-### 3.2 Comparison PDF (Playwright)
+### 3.2 Comparison PDF (React PDF)
 
 | Edge Case | Symptom / Risk | Handling Strategy |
 |---|---|---|
-| Very long resume produces 10+ page PDF | Playwright times out | Set `page.pdf()` timeout to 30 seconds; add page break hints in HTML template |
-| HTML template contains unescaped user content | XSS in the rendered HTML | Escape all user-provided text before injecting into HTML template string |
-| Playwright headless Chromium not installed | Service crashes on first call | Add `playwright install chromium` to Docker/setup script; surface 503 with setup instructions |
-| Left column has more bullets than right column | Table rows misalign visually | Use CSS `display: grid` with fixed row heights; pad shorter column |
-| Score delta is negative (tailored score < original) | Visually misleading "improvement" | Show negative delta in red with a note: "Tailoring did not improve match score" |
+| Very long resume produces 10+ page PDF | Generation hangs | Set page limits; truncate experience older than 15 years |
+| HTML tags in bullet text | XSS or broken layout | Escape all user-provided text before injecting into PDF view |
+| Left column has more bullets than right column | Rows misalign visually | Use fixed row heights; pad shorter column with empty views |
+| Score delta is negative | Visually misleading "improvement" | Show negative delta in red with a note: "Tailoring did not improve match score" |
 | Gap section is empty | Footer section is blank | Hide gap section in the PDF if `gaps.length === 0` |
-| A bullet `changeReason` contains a newline character | Layout breaks in the PDF cell | Strip all `\n` from `changeReason` before injecting into HTML |
-| PDF binary exceeds 10 MB | Browser download hangs | Compress PDF; if still > 10 MB, warn user and offer text fallback |
-| Playwright crashes mid-generation | No PDF returned | Catch exception; return `500` with a `"pdf-generation-failed"` error code |
-| Company or job title contains `/` or `\` | Filename generation breaks | Sanitize the filename: replace `/`, `\`, `:` with `-` |
+| PDF binary exceeds 10 MB | Browser download hangs | Use text compression or warn user to export as text |
 
 ### 3.3 Download Buttons
 
@@ -213,10 +209,10 @@
 | Edge Case | Symptom / Risk | Handling Strategy |
 |---|---|---|
 | LLM returns a JSON array instead of the expected object | Zod schema rejects | Wrap unexpected arrays in `{ items: [...] }` if schema permits; else retry |
-| LLM returns markdown-wrapped JSON (backtick fences) | `JSON.parse` fails | Strip markdown fences before parsing in `json_validator.py` |
+| LLM returns markdown-wrapped JSON (backtick fences) | `JSON.parse` fails | **Llama 3.3 Fix:** Always strip ` ```json ` fences using a regex before calling `JSON.parse()` |
 | LLM returns truncated JSON (context window overflow) | Partial parse possible | Detect unclosed brackets; trigger retry with a shorter input |
-| Retry budget exhausted (2 retries) | Service must fail gracefully | Return `status: "partial"`; include successfully parsed sub-results |
-| Validation error message leaked to frontend | Exposes internal schema | Map all Zod/Pydantic errors to user-friendly strings before sending in API response |
+| Retry budget exhausted (3 retries) | Service must fail gracefully | Return `status: "partial"`; include successfully parsed sub-results (Graceful degradation) |
+| Validation error message leaked to frontend | Exposes internal schema | Map all Zod errors to user-friendly strings before sending in API response |
 
 ### 4.5 Unsupported-Claim Detection Heuristics
 
@@ -257,11 +253,11 @@
 
 | Edge Case | Symptom / Risk | Handling Strategy |
 |---|---|---|
-| OpenAI API key is missing or invalid | All LLM calls fail | Return 401-like error with user-facing message: "API key not configured. Check `.env.local`." |
-| OpenAI rate limit hit (429) | All calls fail during peak usage | Exponential backoff: 1s, 2s, 4s, max 3 retries; surface "Rate limit reached, retrying…" |
-| OpenAI returns a 500 server error | Transient model failure | Retry once after 2 seconds; if still failing, return partial results with error note |
-| Python FastAPI service is unreachable | All routes fail with `ECONNREFUSED` | Show banner: "Backend service unavailable. Is the Python server running?" |
-| One bullet in a batch fails, others succeed | Entire tailoring run is aborted | Isolate failures per bullet; return successful bullets with `riskFlag: "processing-failed"` on failed ones |
+| Groq API key is missing or invalid | All LLM calls fail | Return 401-like error with user-facing message: "API key not configured. Check `.env.local`." |
+| Groq rate limit hit (429 - 30 RPM / TPM spikes) | All calls fail during peak usage | Exponential backoff (1s, 2s, 4s) with jitter; respect `Retry-After` header. Stagger bullet rewrite calls by 50ms |
+| Groq returns a 500 server error | Transient model failure | Retry once after 2 seconds; if still failing, return partial results with error note |
+| Next.js serverless route timeout | Orchestration fails mid-flight | `/api/tailor-run` handles multiple LLM turns. Maximize execution timeout config (e.g., `maxDuration` in Next.js) |
+| One bullet in a batch fails, others succeed | Partial tailoring failure | Isolate failures per bullet; return successful bullets and gracefully degrade the failed ones |
 | Network error (user goes offline mid-request) | Fetch rejects with `TypeError` | Detect `navigator.onLine`; show "No internet connection" toast; auto-retry when back online |
 
 ### 5.4 SQLite Persistence (Runs)
@@ -314,9 +310,9 @@ These cases apply across multiple phases and should be handled globally.
 | `AppState` is reset by browser refresh | Phases 1–4 | Persist `AppState` to `sessionStorage`; rehydrate on mount |
 | API response `status: "partial"` is silently ignored | All phases | Surface a non-blocking warning in the UI for partial results |
 | User has a browser extension that blocks fetch to localhost | Phase 2+ | Document in README; cannot detect programmatically |
-| OpenAI model is deprecated mid-development | Phase 2+ | Abstract model name into an env var `OPENAI_MODEL`; default `gpt-4o` |
+| Groq model is deprecated mid-development | Phase 2+ | Abstract model name into an env var `GROQ_MODEL`; default `llama-3.3-70b-versatile` |
 | Resume or JD contains PII in logs | Phase 2+ | Never log raw `resumeRaw` or `jdRaw`; log only metadata (char count, format) |
-| LLM output contains backtick-wrapped code blocks as content | Phase 2+ | Strip code fences in `json_validator.py` before every `JSON.parse` attempt |
+| LLM output contains backtick-wrapped code blocks as content | Phase 2+ | Strip code fences in `lib/groq.ts` before every `JSON.parse` attempt |
 | `TailoringRun.id` UUID collision | Phase 5 | Use `crypto.randomUUID()` (browser) or `uuid4()` (Python); handle DB unique constraint error |
 
 ---

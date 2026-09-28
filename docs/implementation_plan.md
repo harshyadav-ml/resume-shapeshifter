@@ -1,7 +1,7 @@
 # Resume Shapeshifter — Phase-wise Implementation Plan
 
 > **Based on:** `docs/architecture.md`
-> **Total Duration:** 5 Weeks | **Stack:** Next.js 14 · FastAPI · OpenAI · React PDF · Playwright
+> **Total Duration:** 5 Weeks | **Stack:** Next.js 14 · Groq · React PDF
 
 ---
 
@@ -16,7 +16,7 @@ gantt
     Mock Data & State Management       :p1b, after p1a, 2d
     Side-by-side Preview (mocked)      :p1c, after p1b, 1d
     section Phase 2
-    FastAPI Service Bootstrap          :p2a, 2026-10-08, 1d
+    Groq SDK & Zod Setup               :p2a, 2026-10-08, 1d
     JD + Resume Parsing Prompts        :p2b, after p2a, 2d
     Scoring + Tailoring Prompts        :p2c, after p2b, 2d
     section Phase 3
@@ -204,58 +204,45 @@ app/export/page.tsx
 
 | Deliverable | Status |
 |---|---|
-| Next.js project scaffolded | ☐ |
-| All TypeScript interfaces defined | ☐ |
-| All UI components built | ☐ |
-| All 5 pages wired with navigation | ☐ |
-| Mock data drives full flow | ☐ |
-| Design system established | ☐ |
+| Next.js project scaffolded | [x] |
+| All TypeScript interfaces defined | [x] |
+| All UI components built | [x] |
+| All 5 pages wired with navigation | [x] |
+| Mock data drives full flow | [x] |
+| Design system established | [x] |
 
 ---
 
 ## Phase 2 — LLM Integration
 
-> **Goal:** Replace all mock data with real LLM-powered outputs via FastAPI + OpenAI. Five prompt files, five API routes.
+> **Goal:** Replace all mock data with real LLM-powered outputs via Next.js API routes and Groq. Five prompt files, five API routes, one orchestrator.
 > **Duration:** Week 2 (Days 6–10)
 
-### Day 6: FastAPI Service Bootstrap
+### Day 6: Groq SDK & Zod Setup
 
-**Objective:** Running Python service with health check and OpenAI client.
+**Objective:** Create the LLM interaction layer and strict JSON validation.
 
 **Tasks:**
 
-- [ ] Create `backend/` directory with virtual environment
+- [ ] Install dependencies:
   ```bash
-  cd backend && python -m venv venv && source venv/bin/activate
-  pip install fastapi uvicorn openai pydantic pdf2image pdfminer.six \
-              mammoth python-docx playwright
-  playwright install chromium
+  npm install groq-sdk zod
   ```
-- [ ] Create `backend/requirements.txt`
-- [ ] Create `backend/main.py` — FastAPI app with CORS for `localhost:3000`
-- [ ] Create `backend/utils/openai_client.py` — wrapper around `client.chat.completions.create` with:
-  - Strict JSON schema mode (`response_format: json_schema`)
-  - Retry logic (3 attempts with exponential backoff)
-  - Logging of raw LLM response
-- [ ] Create `backend/utils/json_validator.py` — validates LLM JSON against Pydantic model, raises `ValidationError` on failure
-- [ ] Create `backend/utils/text_utils.py` — text normalization helpers
-- [ ] Add `.env` support via `python-dotenv`
-- [ ] Create health check route: `GET /health`
+- [ ] Create `lib/schemas.ts` — Zod schemas matching all TypeScript interfaces (`ResumeProfileSchema`, `MatchScoreSchema`, etc.)
+- [ ] Create `lib/groq.ts` — singleton `groq-sdk` wrapper handling:
+  - `response_format: { type: "json_object" }`
+  - 3-retry logic with exponential backoff on 429
+  - Zod error injection on validation failure
 
 **Files to Create:**
 ```
-backend/main.py
-backend/requirements.txt
-backend/utils/openai_client.py
-backend/utils/json_validator.py
-backend/utils/text_utils.py
-backend/.env
+lib/schemas.ts
+lib/groq.ts
 ```
 
 **Acceptance Criteria:**
-- [ ] `uvicorn main:app --reload` starts on `localhost:8000`
-- [ ] `GET /health` returns `{"status": "ok"}`
-- [ ] OpenAI client successfully makes a test call
+- [ ] Zod schemas cleanly validate expected LLM payloads.
+- [ ] Groq client successfully queries Llama 3.3 70B Versatile and parses JSON.
 
 ---
 
@@ -265,61 +252,16 @@ backend/.env
 
 **Tasks:**
 
-- [ ] Create `backend/schemas/resume.py` — Pydantic models for `ResumeProfile`, `ExperienceEntry`, `ProjectEntry`, `EducationEntry`
-- [ ] Create `backend/schemas/jd.py` — Pydantic models for `JobDescriptionProfile`
-- [ ] Create `backend/prompts/resume_parser.py`:
-  ```python
-  SYSTEM_PROMPT = """
-  You are a resume parser. Convert raw resume text into structured JSON.
-  Rules:
-  - Extract all sections exactly as written. Do not infer or add information.
-  - Preserve all bullet points word-for-word.
-  - If a section is missing, use an empty list or empty string.
-  - Output only valid JSON matching the provided schema.
-  """
-  ```
-- [ ] Create `backend/prompts/jd_extraction.py`:
-  ```python
-  SYSTEM_PROMPT = """
-  You are a job description analyst. Extract structured requirements from a JD.
-  Rules:
-  - Distinguish required vs preferred skills carefully.
-  - Infer seniority level from title and qualifications (intern/junior/mid/senior/lead/principal).
-  - Extract all technologies, tools, and platforms mentioned.
-  - Output only valid JSON matching the provided schema.
-  """
-  ```
-- [ ] Create `backend/services/resume_parser.py`:
-  - `parse_text(text: str) -> ResumeProfile` — LLM-based parsing
-  - `parse_pdf(file_bytes: bytes) -> str` — extract text via `pdfminer.six`
-  - `parse_docx(file_bytes: bytes) -> str` — extract text via `mammoth`
-- [ ] Create `backend/services/jd_parser.py`:
-  - `parse_jd(text: str) -> JobDescriptionProfile`
-- [ ] Create `backend/routers/parse.py`:
-  - `POST /parse/resume` — accepts `{ text: str, format: str }` or file bytes
-  - `POST /parse/jd` — accepts `{ text: str }`
-- [ ] Wire up Next.js API routes:
-  - `app/api/parse-resume/route.ts` → calls `POST http://localhost:8000/parse/resume`
-  - `app/api/parse-jd/route.ts` → calls `POST http://localhost:8000/parse/jd`
-
-**Files to Create:**
-```
-backend/schemas/resume.py
-backend/schemas/jd.py
-backend/prompts/resume_parser.py
-backend/prompts/jd_extraction.py
-backend/services/resume_parser.py
-backend/services/jd_parser.py
-backend/routers/parse.py
-app/api/parse-resume/route.ts
-app/api/parse-jd/route.ts
-```
+- [ ] Create `lib/prompts/resume-parser.ts`
+- [ ] Create `lib/prompts/jd-extraction.ts`
+- [ ] Create Next.js API routes:
+  - `app/api/parse-resume/route.ts`
+  - `app/api/parse-jd/route.ts`
 
 **Acceptance Criteria:**
-- [ ] `POST /parse/resume` returns valid `ResumeProfile` JSON
-- [ ] `POST /parse/jd` returns valid `JobDescriptionProfile` JSON
-- [ ] Pydantic validation rejects malformed LLM output
-- [ ] PDF and DOCX text extraction works for simple single-column resumes
+- [ ] `POST /api/parse-resume` returns valid `ResumeProfile` JSON
+- [ ] `POST /api/parse-jd` returns valid `JobDescriptionProfile` JSON
+- [ ] Zod validation rejects malformed LLM output and retries automatically
 
 ---
 
@@ -329,94 +271,51 @@ app/api/parse-jd/route.ts
 
 **Tasks:**
 
-- [ ] Create `backend/schemas/scoring.py` — `MatchScore` Pydantic model
-- [ ] Create `backend/schemas/tailoring.py` — `RewrittenBullet`, `TailoredExperienceEntry`, `TailoredResume`
-- [ ] Create `backend/schemas/gaps.py` — `ResumeGap`
-- [ ] Create `backend/prompts/match_scoring.py`:
-  - System prompt enforcing scoring dimensions (skill coverage, keyword match, seniority, responsibility alignment)
-  - Include truthfulness disclaimer in system prompt
-- [ ] Create `backend/prompts/bullet_rewriter.py`:
-  - Chain-of-thought: analyze → identify JD alignment → rewrite → flag risk
-  - System prompt with hard rules: no fabrication, preserve metrics, explain every change
-- [ ] Create `backend/prompts/gap_analysis.py`:
-  - System prompt: compare JD requirements against resume content
-  - Classify each gap as high/medium/low importance
-  - Flag `canSafelyAdd` only when supported by resume evidence
-- [ ] Create `backend/services/scoring.py` — `score(resume, jd) -> MatchScore`
-- [ ] Create `backend/services/tailoring.py`:
-  - `tailor_resume(resume, jd) -> TailoredResume`
-  - Calls bullet rewriter **per bullet** (parallel where possible)
-- [ ] Create `backend/services/gap_analysis.py` — `analyze_gaps(resume, jd) -> list[ResumeGap]`
-- [ ] Create `backend/routers/score.py` — `POST /score`
-- [ ] Create `backend/routers/tailor.py` — `POST /tailor`
-- [ ] Create `backend/routers/gaps.py` — `POST /gaps`
+- [ ] Create `lib/prompts/match-scoring.ts`
+- [ ] Create `lib/prompts/bullet-rewriter.ts`
+- [ ] Create `lib/prompts/gap-analysis.ts`
+- [ ] Create `app/api/score/route.ts`
+- [ ] Create `app/api/tailor/route.ts`
+- [ ] Create `app/api/gaps/route.ts`
 - [ ] Create full **orchestrator**: `app/api/tailor-run/route.ts`
-  - Calls parse → score (original) → tailor → gaps → score (tailored)
-  - Assembles `TailoringRun` object
-  - Returns to client in single response
-- [ ] Wire `/input` page to call real API instead of mock data
+  - Parses resume & JD in parallel
+  - Scores original match
+  - Rewrites bullets (with 50ms stagger to respect rate limits)
+  - Analyzes gaps
+  - Scores tailored match
+  - Returns `TailoringRun` object
 
 **Files to Create:**
 ```
-backend/schemas/scoring.py
-backend/schemas/tailoring.py
-backend/schemas/gaps.py
-backend/prompts/match_scoring.py
-backend/prompts/bullet_rewriter.py
-backend/prompts/gap_analysis.py
-backend/services/scoring.py
-backend/services/tailoring.py
-backend/services/gap_analysis.py
-backend/routers/score.py
-backend/routers/tailor.py
-backend/routers/gaps.py
+lib/prompts/match-scoring.ts
+lib/prompts/bullet-rewriter.ts
+lib/prompts/gap-analysis.ts
+app/api/score/route.ts
+app/api/tailor/route.ts
+app/api/gaps/route.ts
 app/api/tailor-run/route.ts
 ```
 
 **Acceptance Criteria:**
 - [ ] Full pipeline returns real `TailoringRun` from pasted text
 - [ ] Match score changes meaningfully between original and tailored
-- [ ] Bullet rewrites are grounded in original resume content
 - [ ] Gap list includes actionable suggestions
-- [ ] Zod validates every API response on the frontend
 
 ---
 
-### Day 10: Prompt Files & Zod Schemas (Frontend)
+### Day 10: Frontend API Client
 
-**Objective:** Frontend-side Zod schemas validate all incoming API data. Prompt files stored in `/prompts/`.
+**Objective:** Client-side helpers for calling the API.
 
 **Tasks:**
 
-- [ ] Create `lib/schemas.ts` — Zod schemas matching every TypeScript interface:
-  - `ResumeProfileSchema`, `JobDescriptionProfileSchema`
-  - `MatchScoreSchema`, `TailoredResumeSchema`
-  - `ResumeGapSchema`, `TailoringRunSchema`
-- [ ] Create `prompts/` directory with TS prompt template strings:
-  - `prompts/jd-extraction.ts`
-  - `prompts/resume-parser.ts`
-  - `prompts/match-scoring.ts`
-  - `prompts/bullet-rewriter.ts`
-  - `prompts/gap-analysis.ts`
-- [ ] Create `lib/api.ts` — typed fetch wrappers for all API routes with Zod parse on response
-- [ ] Add `.env.local` with `OPENAI_API_KEY` and `PYTHON_API_URL`
-
-**Files to Create:**
-```
-lib/schemas.ts
-lib/api.ts
-prompts/jd-extraction.ts
-prompts/resume-parser.ts
-prompts/match-scoring.ts
-prompts/bullet-rewriter.ts
-prompts/gap-analysis.ts
-.env.local
-```
+- [ ] Create `lib/api.ts` — typed fetch wrappers for API routes
+- [ ] Wire `/input` page to call real API orchestrator instead of mock data
+- [ ] Add `.env.local` with `GROQ_API_KEY`
 
 **Acceptance Criteria:**
-- [ ] Invalid LLM JSON is caught by Zod before reaching any component
-- [ ] All API calls use typed wrappers from `lib/api.ts`
 - [ ] `AppContext` updates correctly after real API call
+- [ ] E2E tailoring pipeline is functional from the UI
 
 ---
 
@@ -424,14 +323,14 @@ prompts/gap-analysis.ts
 
 | Deliverable | Status |
 |---|---|
-| FastAPI service running on `:8000` | ☐ |
-| 5 LLM prompt files created | ☐ |
-| Resume + JD parsing working | ☐ |
-| Match scoring returns 0–100 with explanation | ☐ |
-| Bullet rewriting preserves truthfulness | ☐ |
-| Gap analysis returns actionable gaps | ☐ |
-| Full pipeline: input → `TailoringRun` | ☐ |
-| Zod validation on all API responses | ☐ |
+| Groq client wrapper with Zod retry | [x] |
+| 5 LLM prompt files created | [x] |
+| Resume + JD parsing working | [x] |
+| Match scoring returns 0–100 with explanation | [x] |
+| Bullet rewriting preserves truthfulness | [x] |
+| Gap analysis returns actionable gaps | [x] |
+| Full pipeline: input → `TailoringRun` | [x] |
+| Zod validation on all API responses | [x] |
 
 ---
 
@@ -484,45 +383,21 @@ components/PDFExportButton.tsx  ← update to wire real download
 
 ### Day 12–14: Side-by-Side Comparison PDF
 
-**Objective:** Server-rendered Playwright PDF showing original vs tailored content with all metadata.
+**Objective:** Client-side generation of the comparison proof artifact without an external Python service.
 
 **Tasks:**
 
-- [ ] Create `backend/services/pdf_generator.py`:
-  - Accepts full `TailoringRun` JSON
-  - Renders an HTML template using Jinja2
-  - Launches Playwright headless Chromium
-  - Returns PDF bytes via `page.pdf(format="A4", print_background=True)`
-- [ ] Create `backend/templates/comparison.html.j2` — Jinja2 HTML template:
-  - Header: job title, company, original score, tailored score
-  - JD requirements summary section
-  - Two-column table: original bullets (left) vs tailored bullets (right)
-  - Changed bullets highlighted with background color
-  - Gap analysis section at bottom
-  - Truthfulness disclaimer footer
-- [ ] Create `backend/routers/export.py`:
-  - `POST /export/comparison-pdf` — returns `Response(content=pdf_bytes, media_type="application/pdf")`
-- [ ] Install Jinja2: `pip install jinja2`
-- [ ] Create `app/api/export-pdf/route.ts`:
-  - Calls `POST http://localhost:8000/export/comparison-pdf`
-  - Streams PDF bytes back to browser
-- [ ] Update `PDFExportButton.tsx` — wire "Export Comparison PDF" button to `/api/export-pdf`
-
-**Files to Create:**
-```
-backend/services/pdf_generator.py
-backend/templates/comparison.html.j2
-backend/routers/export.py
-app/api/export-pdf/route.ts
-```
+- [ ] Create `components/pdf/ComparisonPDF.tsx`:
+  - Uses `@react-pdf/renderer` to build a two-column view
+  - Original on left, Tailored on right
+  - Changed bullets styled with bold or indicator symbol
+- [ ] Add `PDFDownloadLink` for Comparison PDF in `components/PDFExportButton.tsx`
 
 **Acceptance Criteria:**
-- [ ] "Export Comparison PDF" downloads a valid PDF
-- [ ] PDF shows original and tailored bullets in two columns
+- [ ] "Export Comparison PDF" downloads a valid PDF directly from the browser
+- [ ] PDF shows original and tailored bullets side by side
 - [ ] Changed bullets are visually highlighted
-- [ ] Match scores (before + after) visible in PDF header
-- [ ] Gap analysis section present
-- [ ] Disclaimer present in footer
+- [ ] Gap analysis section present in PDF footer
 
 ---
 
@@ -553,13 +428,13 @@ app/api/export-pdf/route.ts
 
 | Deliverable | Status |
 |---|---|
-| Tailored resume PDF (React PDF) | ☐ |
-| Side-by-side comparison PDF (Playwright) | ☐ |
-| Changed bullets highlighted in PDF | ☐ |
-| Scores in PDF header | ☐ |
-| Gap analysis in PDF | ☐ |
-| Disclaimer in PDF footer | ☐ |
-| Both PDFs downloadable from export page | ☐ |
+| Tailored resume PDF (React PDF) | [x] |
+| Side-by-side comparison PDF (React PDF) | [x] |
+| Changed bullets highlighted in PDF | [x] |
+| Scores in PDF header | [x] |
+| Gap analysis in PDF | [x] |
+| Disclaimer in PDF footer | [x] |
+| Both PDFs downloadable from export page | [x] |
 
 ---
 
@@ -657,13 +532,8 @@ backend/services/pdf_generator.py  ← handle confirmed/reverted bullets
 
 **Tasks:**
 
-- [ ] Update `backend/utils/openai_client.py`:
-  - On `ValidationError`, retry up to 3 times with error feedback in next prompt
-  - Log all raw LLM responses to `backend/logs/`
-  - Return structured error on final failure
-- [ ] Update `backend/utils/json_validator.py`:
-  - Strict Pydantic validation for each schema
-  - Custom error messages: "Field `confidence` must be one of: high, medium, low"
+- [ ] Update `lib/groq.ts` (if needed):
+  - Strict Zod validation mapping for feedback loops
 - [ ] Update `app/api/tailor-run/route.ts`:
   - Partial success: if scoring fails, return `TailoringRun` without score
   - Partial success: if gap analysis fails, return run without gaps
@@ -681,8 +551,7 @@ backend/services/pdf_generator.py  ← handle confirmed/reverted bullets
 
 **Files to Create/Update:**
 ```
-backend/utils/openai_client.py     ← retry logic
-backend/utils/json_validator.py    ← strict validation
+lib/groq.ts                        ← retry logic
 app/api/tailor-run/route.ts        ← partial success handling
 lib/api.ts                         ← Zod safeParse
 lib/context.tsx                    ← partial state handling
@@ -902,7 +771,7 @@ README.md
 - [ ] All 5 pages wired with navigation
 
 ### Phase 2 — LLM Integration (Week 2)
-- [ ] FastAPI service running
+| Groq service running via Next.js | ☐ |
 - [ ] 5 Python prompt files
 - [ ] Resume + JD parsing routes
 - [ ] Scoring route

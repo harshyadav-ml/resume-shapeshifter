@@ -9,10 +9,11 @@ import PDFExportButton from "@/components/PDFExportButton";
 import DisclaimerBanner from "@/components/DisclaimerBanner";
 import { ArrowLeft, Download } from "lucide-react";
 import Link from "next/link";
+import { pdf } from "@react-pdf/renderer";
+import TailoredResumePDF from "@/components/pdf/TailoredResumePDF";
+import ComparisonPDF from "@/components/pdf/ComparisonPDF";
 
 function showToast(message: string) {
-  // Simple browser toast via alert for Phase 1
-  // Phase 3 will use real PDF generation
   alert(message);
 }
 
@@ -43,18 +44,37 @@ export default function ExportPage() {
   const improvement =
     tailoringRun.tailoredScore.overallScore - tailoringRun.originalScore.overallScore;
 
+  const downloadBlob = (blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
   const handleExportTailored = async () => {
-    await new Promise((r) => setTimeout(r, 1500));
-    showToast(
-      "✅ PDF export will be available in Phase 3. Your tailored resume would download here."
-    );
+    try {
+      const blob = await pdf(<TailoredResumePDF run={tailoringRun} />).toBlob();
+      const safeCompany = tailoringRun.jdProfile.company.replace(/[^a-zA-Z0-9]/g, "-");
+      downloadBlob(blob, `Tailored_Resume_${safeCompany}.pdf`);
+    } catch (err) {
+      console.error("PDF generation failed:", err);
+      showToast("❌ Failed to generate Tailored Resume PDF. Please try again.");
+    }
   };
 
   const handleExportComparison = async () => {
-    await new Promise((r) => setTimeout(r, 2000));
-    showToast(
-      "✅ Comparison PDF export will be available in Phase 3 (Playwright-powered server rendering)."
-    );
+    try {
+      const blob = await pdf(<ComparisonPDF run={tailoringRun} />).toBlob();
+      const safeCompany = tailoringRun.jdProfile.company.replace(/[^a-zA-Z0-9]/g, "-");
+      downloadBlob(blob, `Comparison_Report_${safeCompany}.pdf`);
+    } catch (err) {
+      console.error("Comparison PDF generation failed:", err);
+      showToast("❌ Failed to generate Comparison PDF. Please try again.");
+    }
   };
 
   return (
@@ -113,7 +133,7 @@ export default function ExportPage() {
           onExportComparison={handleExportComparison}
         />
         <p className="text-xs text-muted-foreground mt-4">
-          💡 PDF generation powered by React PDF (tailored) and Playwright (comparison) — Phase 3.
+          💡 PDFs are generated locally in your browser. No data is sent to the server for PDF export.
         </p>
       </section>
 
