@@ -8,7 +8,8 @@ import DisclaimerBanner from "@/components/DisclaimerBanner";
 import { useAppContext } from "@/lib/context";
 import { mockTailoringRun, mockResume, mockJD } from "@/lib/mock-data";
 import { runTailoringPipeline } from "@/lib/api";
-import { ArrowRight, Loader2, Sparkles } from "lucide-react";
+import ErrorBanner from "@/components/ErrorBanner";
+import { ArrowRight, Loader2, Sparkles, FlaskConical, CheckCircle2 } from "lucide-react";
 
 function InputPageInner() {
   const { state, dispatch } = useAppContext();
@@ -17,6 +18,8 @@ function InputPageInner() {
   const isDemo = searchParams.get("demo") === "true";
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [pipelineStatus, setPipelineStatus] = useState("");
+  const [isLoadingSample, setIsLoadingSample] = useState(false);
+  const [sampleToast, setSampleToast] = useState("");
 
   // Load demo data if ?demo=true
   useEffect(() => {
@@ -43,6 +46,30 @@ function InputPageInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isDemo]);
 
+  const loadSampleData = async () => {
+    setIsLoadingSample(true);
+    setSampleToast("");
+    try {
+      const [resumeRes, jdRes] = await Promise.all([
+        fetch("/sample-resume.txt"),
+        fetch("/sample-jd.txt"),
+      ]);
+      const [resumeText, jdText] = await Promise.all([
+        resumeRes.text(),
+        jdRes.text(),
+      ]);
+      dispatch({ type: "SET_RESUME_RAW", payload: resumeText });
+      dispatch({ type: "SET_JD_RAW", payload: jdText });
+      setSampleToast("Sample data loaded — click Analyze to see the full pipeline!");
+      setTimeout(() => setSampleToast(""), 4000);
+    } catch {
+      setSampleToast("Failed to load sample data.");
+      setTimeout(() => setSampleToast(""), 3000);
+    } finally {
+      setIsLoadingSample(false);
+    }
+  };
+
   const handleAnalyze = async () => {
     setIsAnalyzing(true);
     setPipelineStatus("Starting analysis…");
@@ -67,7 +94,7 @@ function InputPageInner() {
         throw new Error(result.errors?.join("; ") || "Pipeline failed");
       }
 
-      dispatch({ type: "SET_RUN", payload: result.run });
+      dispatch({ type: "SET_RUN", payload: { run: result.run, status: result.status, errors: result.errors } });
       setIsAnalyzing(false);
       setPipelineStatus("");
       router.push("/analyze");
@@ -94,6 +121,28 @@ function InputPageInner() {
         <p className="text-muted-foreground mt-1">
           Provide both inputs below. The analysis will match your resume against the job description.
         </p>
+        {/* Load Sample Data button */}
+        <div className="mt-3">
+          <button
+            type="button"
+            id="load-sample-btn"
+            onClick={loadSampleData}
+            disabled={isLoadingSample || isAnalyzing}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-primary/30 bg-primary/5 text-primary text-sm font-semibold hover:bg-primary/10 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isLoadingSample ? (
+              <>
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                Loading…
+              </>
+            ) : (
+              <>
+                <FlaskConical className="h-3.5 w-3.5" />
+                Load Sample Data
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
       {/* Inputs */}
@@ -147,21 +196,23 @@ function InputPageInner() {
         )}
       </div>
 
+      {/* Sample data toast */}
+      {sampleToast && (
+        <div className="mt-3 flex items-center gap-2 text-sm font-medium text-emerald-600 dark:text-emerald-400 animate-in fade-in slide-in-from-bottom-1 duration-300">
+          <CheckCircle2 className="h-4 w-4 shrink-0" />
+          {sampleToast}
+        </div>
+      )}
+
       {/* Error Display */}
       {state.status === "error" && state.errors.length > 0 && (
-        <div className="mt-4 p-4 rounded-xl bg-destructive/10 border border-destructive/20">
-          <p className="text-sm font-semibold text-destructive mb-1">Analysis failed</p>
-          {state.errors.map((err, i) => (
-            <p key={i} className="text-sm text-destructive/80">{err}</p>
-          ))}
-          <button
-            type="button"
-            onClick={() => dispatch({ type: "SET_ERRORS", payload: [] })}
-            className="mt-2 text-xs text-destructive underline hover:no-underline"
-          >
-            Dismiss
-          </button>
-        </div>
+        <ErrorBanner
+          title="Analysis failed"
+          errors={state.errors}
+          onRetry={handleAnalyze}
+          onDismiss={() => dispatch({ type: "SET_ERRORS", payload: [] })}
+          className="mt-4"
+        />
       )}
 
       <div className="mt-8">

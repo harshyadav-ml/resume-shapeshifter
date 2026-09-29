@@ -6,11 +6,13 @@ import { useAppContext } from "@/lib/context";
 import ScoreCard from "@/components/ScoreCard";
 import JDSummary from "@/components/JDSummary";
 import GapAnalysis from "@/components/GapAnalysis";
+import ErrorBanner from "@/components/ErrorBanner";
+import PipelineProgress, { type PipelineStep } from "@/components/PipelineProgress";
 import { ArrowRight, ArrowLeft, ScanSearch } from "lucide-react";
 import Link from "next/link";
 
 export default function AnalyzePage() {
-  const { state } = useAppContext();
+  const { state, dispatch } = useAppContext();
   const router = useRouter();
 
   // Guard: redirect to input if no run
@@ -19,6 +21,62 @@ export default function AnalyzePage() {
       router.replace("/input");
     }
   }, [state.status, router]);
+
+  // Pipeline loading — show progress UI
+  const isParsing = state.status === "parsing";
+  const PIPELINE_STEPS: PipelineStep[] = [
+    { id: "parse-resume", label: "Parsing Resume", status: isParsing ? "running" : "done" },
+    { id: "parse-jd", label: "Parsing Job Description", status: isParsing ? "pending" : "done" },
+    { id: "score", label: "Scoring Original Match", status: isParsing ? "pending" : "done" },
+    { id: "tailor", label: "Tailoring Bullets", status: isParsing ? "pending" : "done" },
+    { id: "gaps", label: "Analyzing Gaps", status: isParsing ? "pending" : "done" },
+    { id: "score-tailored", label: "Scoring Tailored Resume", status: isParsing ? "pending" : "done" },
+  ];
+
+  if (isParsing) {
+    return (
+      <main className="min-h-screen max-w-2xl mx-auto px-6 py-10 page-enter">
+        <div className="mb-8">
+          <div className="flex items-center gap-2 text-sm text-primary font-semibold mb-2">
+            <ScanSearch className="h-4 w-4" />
+            Step 2 of 4 — Analysis
+          </div>
+          <h1 className="text-3xl font-bold">Analyzing…</h1>
+          <p className="text-muted-foreground mt-1">
+            Running the full tailoring pipeline. This takes about 15–30 seconds.
+          </p>
+        </div>
+        <PipelineProgress steps={PIPELINE_STEPS} />
+      </main>
+    );
+  }
+
+  // Error state — show error banner with retry
+
+  if (state.status === "error" && state.errors.length > 0) {
+    return (
+      <main className="min-h-screen max-w-5xl mx-auto px-6 py-10 page-enter">
+        <div className="mb-8">
+          <div className="flex items-center gap-2 text-sm text-primary font-semibold mb-2">
+            <ScanSearch className="h-4 w-4" />
+            Step 2 of 4 — Analysis
+          </div>
+          <h1 className="text-3xl font-bold">Analysis Results</h1>
+        </div>
+        <ErrorBanner
+          title="Analysis Pipeline Failed"
+          errors={state.errors}
+          onRetry={() => {
+            dispatch({ type: "SET_ERRORS", payload: [] });
+            router.push("/input");
+          }}
+          onDismiss={() => {
+            dispatch({ type: "SET_ERRORS", payload: [] });
+          }}
+        />
+      </main>
+    );
+  }
 
   if (!state.tailoringRun) {
     return (
@@ -40,6 +98,9 @@ export default function AnalyzePage() {
 
   const { tailoringRun } = state;
 
+  // Partial pipeline status
+  const isPartial = state.status === "partial";
+
   return (
     <main className="min-h-screen max-w-6xl mx-auto px-6 py-10 page-enter">
       {/* Header */}
@@ -56,6 +117,16 @@ export default function AnalyzePage() {
         </p>
       </div>
 
+      {/* Partial success warning */}
+      {isPartial && state.errors.length > 0 && (
+        <ErrorBanner
+          title="Some pipeline steps had issues"
+          errors={state.errors}
+          onDismiss={() => dispatch({ type: "SET_ERRORS", payload: [] })}
+          className="mb-6"
+        />
+      )}
+
       <div className="grid lg:grid-cols-[1fr_380px] gap-6">
         {/* Left column */}
         <div className="space-y-6">
@@ -71,7 +142,14 @@ export default function AnalyzePage() {
           {/* Gap analysis */}
           <section>
             <h2 className="text-lg font-semibold mb-3">Gap Analysis</h2>
-            <GapAnalysis gaps={tailoringRun.gaps} />
+            {tailoringRun.gaps.length > 0 ? (
+              <GapAnalysis gaps={tailoringRun.gaps} />
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Gap analysis data is not available.
+                {isPartial && " This step may have failed during processing."}
+              </p>
+            )}
           </section>
         </div>
 

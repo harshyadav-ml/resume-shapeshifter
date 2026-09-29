@@ -7,19 +7,20 @@ import ScoreCard from "@/components/ScoreCard";
 import GapAnalysis from "@/components/GapAnalysis";
 import PDFExportButton from "@/components/PDFExportButton";
 import DisclaimerBanner from "@/components/DisclaimerBanner";
+import ReviewGate from "@/components/ReviewGate";
+import ErrorBanner from "@/components/ErrorBanner";
 import { ArrowLeft, Download } from "lucide-react";
 import Link from "next/link";
 import { pdf } from "@react-pdf/renderer";
 import TailoredResumePDF from "@/components/pdf/TailoredResumePDF";
 import ComparisonPDF from "@/components/pdf/ComparisonPDF";
+import { useState } from "react";
 
-function showToast(message: string) {
-  alert(message);
-}
 
 export default function ExportPage() {
   const { state } = useAppContext();
   const router = useRouter();
+  const [exportErrors, setExportErrors] = useState<string[]>([]);
 
   useEffect(() => {
     if (state.status === "idle") {
@@ -57,25 +58,43 @@ export default function ExportPage() {
 
   const handleExportTailored = async () => {
     try {
+      setExportErrors([]);
       const blob = await pdf(<TailoredResumePDF run={tailoringRun} />).toBlob();
       const safeCompany = tailoringRun.jdProfile.company.replace(/[^a-zA-Z0-9]/g, "-");
       downloadBlob(blob, `Tailored_Resume_${safeCompany}.pdf`);
     } catch (err) {
       console.error("PDF generation failed:", err);
-      showToast("❌ Failed to generate Tailored Resume PDF. Please try again.");
+      const message = err instanceof Error ? err.message : "Unknown error";
+      setExportErrors(["Failed to generate Tailored Resume PDF: " + message]);
     }
   };
 
   const handleExportComparison = async () => {
     try {
+      setExportErrors([]);
       const blob = await pdf(<ComparisonPDF run={tailoringRun} />).toBlob();
       const safeCompany = tailoringRun.jdProfile.company.replace(/[^a-zA-Z0-9]/g, "-");
       downloadBlob(blob, `Comparison_Report_${safeCompany}.pdf`);
     } catch (err) {
       console.error("Comparison PDF generation failed:", err);
-      showToast("❌ Failed to generate Comparison PDF. Please try again.");
+      const message = err instanceof Error ? err.message : "Unknown error";
+      setExportErrors(["Failed to generate Comparison PDF: " + message]);
     }
   };
+
+  // Count review stats for the summary
+  const allBullets = tailoringRun.tailoredResume.tailoredExperience.flatMap(
+    (exp) => exp.bullets
+  );
+  const changedBullets = allBullets.filter(
+    (b) => b.original !== b.tailored
+  );
+  const acceptedCount = changedBullets.filter(
+    (b) => b.confirmed === true
+  ).length;
+  const revertedCount = changedBullets.filter(
+    (b) => b.confirmed === false
+  ).length;
 
   return (
     <main className="min-h-screen max-w-5xl mx-auto px-6 py-10 page-enter">
@@ -111,6 +130,27 @@ export default function ExportPage() {
         />
       </section>
 
+      {/* Review stats */}
+      {changedBullets.length > 0 && (
+        <section className="mb-6">
+          <div className="flex flex-wrap items-center gap-3 text-sm">
+            <span className="text-muted-foreground">
+              {changedBullets.length} bullets changed
+            </span>
+            {acceptedCount > 0 && (
+              <span className="chip text-[11px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25">
+                ✓ {acceptedCount} accepted
+              </span>
+            )}
+            {revertedCount > 0 && (
+              <span className="chip text-[11px] bg-zinc-500/10 text-zinc-600 dark:text-zinc-400 border border-zinc-500/25">
+                ↩ {revertedCount} reverted
+              </span>
+            )}
+          </div>
+        </section>
+      )}
+
       {/* High priority gaps */}
       {tailoringRun.gaps.filter((g) => g.importance === "high").length > 0 && (
         <section className="mb-8">
@@ -122,16 +162,28 @@ export default function ExportPage() {
         </section>
       )}
 
-      {/* Export buttons */}
+      {/* Export errors */}
+      {exportErrors.length > 0 && (
+        <ErrorBanner
+          title="PDF Export Failed"
+          errors={exportErrors}
+          onDismiss={() => setExportErrors([])}
+          className="mb-6"
+        />
+      )}
+
+      {/* Export buttons — wrapped in ReviewGate */}
       <section className="rounded-2xl border bg-card p-6 mb-8">
         <h2 className="text-lg font-semibold mb-2">Download</h2>
         <p className="text-sm text-muted-foreground mb-5">
           Choose your export format:
         </p>
-        <PDFExportButton
-          onExportTailored={handleExportTailored}
-          onExportComparison={handleExportComparison}
-        />
+        <ReviewGate tailoredResume={tailoringRun.tailoredResume}>
+          <PDFExportButton
+            onExportTailored={handleExportTailored}
+            onExportComparison={handleExportComparison}
+          />
+        </ReviewGate>
         <p className="text-xs text-muted-foreground mt-4">
           💡 PDFs are generated locally in your browser. No data is sent to the server for PDF export.
         </p>

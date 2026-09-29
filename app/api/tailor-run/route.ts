@@ -8,6 +8,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { db } from "@/lib/db";
 import { callGroq } from "@/lib/groq";
 import {
   ResumeProfileSchema,
@@ -219,6 +220,23 @@ export async function POST(request: NextRequest) {
 
     if (errors.length > 0) {
       status = "partial";
+    }
+
+    // ── Persist to SQLite ───────────────────────────────────────────────
+    try {
+      await db.tailoringRunRecord.create({
+        data: {
+          id: run.id,
+          jobTitle: jdProfile.jobTitle,
+          company: jdProfile.company,
+          originalScore: originalScore.overallScore,
+          tailoredScore: tailoredScore.overallScore,
+          runJson: JSON.stringify(run),
+        },
+      });
+      console.log(`[tailor-run] Saved run ${run.id} to DB`);
+    } catch (dbErr) {
+      console.error("[tailor-run] DB save failed (non-fatal):", dbErr);
     }
 
     console.log(

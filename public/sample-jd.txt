@@ -1,0 +1,32 @@
+Senior Frontend Engineer — Nebula Systems
+
+ABOUT THE ROLE
+Nebula Systems is looking for a Senior Frontend Engineer to lead frontend architecture for our core product dashboard. You'll work closely with our design team, backend engineers, and customers to build and maintain a best-in-class data analytics platform.
+
+RESPONSIBILITIES
+• Lead frontend architecture for core product dashboard
+• Collaborate with design team to build and maintain design system
+• Write and maintain comprehensive unit and integration tests
+• Mentor junior engineers and lead bi-weekly frontend guild meetings
+• Integrate with backend GraphQL APIs and define shared frontend/backend contracts
+• Drive CI/CD pipeline improvements to reduce deployment lead time
+
+REQUIRED QUALIFICATIONS
+• 4+ years of experience with React
+• Strong TypeScript proficiency
+• Experience with GraphQL clients (Apollo or urql)
+• Track record of improving test coverage and code quality
+• Experience mentoring or leading small engineering teams
+
+PREFERRED QUALIFICATIONS
+• Experience with Next.js
+• AWS (EC2, S3, Lambda)
+• Design Systems / Storybook
+• WebSockets or real-time data experience
+• Docker and containerization
+
+TECHNICAL STACK
+React, TypeScript, GraphQL, Apollo Client, Jest, GitHub Actions, AWS, Docker, Figma
+
+ABOUT US
+Nebula Systems is a B2B SaaS company building analytics infrastructure for enterprise data teams. Our platform processes 10M+ events/day and is used by 500+ enterprise customers globally.

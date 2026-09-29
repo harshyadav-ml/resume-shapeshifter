@@ -38,7 +38,18 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return { ...state, status: action.payload };
 
     case "SET_RUN": {
-      const run: TailoringRun = action.payload;
+      // Support both bare TailoringRun and { run, status, errors } pipeline result
+      const payload = action.payload;
+      const isPipelineResult = "run" in payload && payload.run !== undefined;
+      const run: TailoringRun = isPipelineResult
+        ? (payload as { run: TailoringRun }).run
+        : (payload as TailoringRun);
+      const runStatus = isPipelineResult
+        ? (payload as { status?: string }).status
+        : undefined;
+      const runErrors = isPipelineResult
+        ? (payload as { errors?: string[] }).errors
+        : undefined;
       return {
         ...state,
         tailoringRun: run,
@@ -47,8 +58,8 @@ function appReducer(state: AppState, action: AppAction): AppState {
         matchScore: run.originalScore,
         tailoredResume: run.tailoredResume,
         gaps: run.gaps,
-        status: "done",
-        errors: [],
+        status: runStatus === "partial" ? "partial" : "done",
+        errors: runErrors ?? [],
       };
     }
 

@@ -1,0 +1,45 @@
+Alex Chen | alex.chen@email.com | +1 (555) 234-5678 | San Francisco, CA
+linkedin.com/in/alexchen | github.com/alexchen
+
+SUMMARY
+Full-stack software engineer with 3 years of experience building scalable web applications using React, Node.js, and Python. Passionate about clean code, CI/CD pipelines, and developer productivity. Experience working in agile environments at early-stage startups.
+
+SKILLS
+React, TypeScript, Node.js, Python, PostgreSQL, MongoDB, Docker, REST APIs, GraphQL, Git, AWS EC2, S3, Jest, Cypress, Agile/Scrum
+
+EXPERIENCE
+
+Software Engineer | DataSync Inc. | Jan 2023 – Present
+• Built a real-time data pipeline dashboard using React and WebSockets, reducing latency monitoring time by 40%
+• Developed RESTful APIs in Node.js/Express serving 50k+ daily requests with 99.9% uptime
+• Containerized 5 microservices with Docker, reducing deployment friction across staging and production environments
+• Implemented automated test coverage (Jest + Cypress) from 30% to 78%, catching 15+ critical regressions
+
+Junior Software Developer | TechFlow Startup | Jun 2021 – Dec 2022
+• Contributed to a React-based SaaS dashboard with 200+ enterprise customers
+• Built Python scripts to automate data ingestion from 3rd-party APIs, saving 8 hours/week of manual work
+• Migrated legacy monolith endpoints to Express microservices as part of company-wide refactor
+• Participated in weekly code reviews and sprint retrospectives; improved PR review cycle time by 20%
+
+PROJECTS
+
+OpenResume Analyzer
+Open-source tool for parsing and scoring resumes against job descriptions using NLP.
+• Built NLP pipeline using Python/spaCy to extract entities from resumes
+• Created React frontend with side-by-side resume comparison view
+• Deployed to AWS EC2 with Nginx reverse proxy; serves 500+ monthly users
+Technologies: Python, spaCy, React, AWS EC2, Nginx
+
+DevTrack CLI
+Command-line productivity tracker for software developers.
+• Built Node.js CLI tool with Ink (React for terminals) for project time tracking
+• Persisted data with SQLite and generated weekly summary reports
+Technologies: Node.js, Ink, SQLite, TypeScript
+
+EDUCATION
+
+Bachelor of Science, Computer Science | University of California, Berkeley | May 2021 | GPA: 3.7
+
+CERTIFICATIONS
+AWS Certified Developer – Associate (2023)
+MongoDB Professional Developer (2022)

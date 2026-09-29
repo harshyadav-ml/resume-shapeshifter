@@ -570,14 +570,14 @@ components/ErrorBanner.tsx
 
 | Deliverable | Status |
 |---|---|
-| Confidence badges on every bullet | ☐ |
-| Risk-flagged bullets highlighted | ☐ |
-| Accept / Revert toggle per bullet | ☐ |
-| Export blocked until review complete | ☐ |
-| "I reviewed all changes" acknowledgment | ☐ |
-| LLM retry on validation failure | ☐ |
-| Partial pipeline success handled | ☐ |
-| Error banner with retry | ☐ |
+| Confidence badges on every bullet | [x] |
+| Risk-flagged bullets highlighted | [x] |
+| Accept / Revert toggle per bullet | [x] |
+| Export blocked until review complete | [x] |
+| "I reviewed all changes" acknowledgment | [x] |
+| LLM retry on validation failure | [x] |
+| Partial pipeline success handled | [x] |
+| Error banner with retry | [x] |
 
 ---
 
@@ -747,16 +747,16 @@ README.md
 
 | Deliverable | Status |
 |---|---|
-| Sample resume + JD preloaded | ☐ |
-| Demo mode (`?demo=true`) works | ☐ |
-| Pipeline progress UI | ☐ |
-| Skeleton loaders + toasts | ☐ |
-| SQLite persistence | ☐ |
-| History page | ☐ |
-| Landing page polished | ☐ |
-| Both PDFs production-ready | ☐ |
-| Mobile responsive | ☐ |
-| README complete | ☐ |
+| Sample resume + JD preloaded | [x] |
+| Demo mode (`?demo=true`) works | [x] |
+| Pipeline progress UI | [x] |
+| Skeleton loaders + toasts | [x] |
+| SQLite persistence | [x] |
+| History page | [x] |
+| Landing page polished | [x] |
+| Both PDFs production-ready | [x] |
+| Mobile responsive | [x] |
+| README complete | [x] |
 
 ---
 

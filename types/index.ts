@@ -184,7 +184,7 @@ export type AppAction =
   | { type: "SET_RESUME_RAW"; payload: string }
   | { type: "SET_JD_RAW"; payload: string }
   | { type: "SET_STATUS"; payload: AppStatus }
-  | { type: "SET_RUN"; payload: TailoringRun }
+  | { type: "SET_RUN"; payload: TailoringRun | { run: TailoringRun; status?: "success" | "partial" | "error"; errors?: string[] } }
   | { type: "SET_ERRORS"; payload: string[] }
   | { type: "RESET" }
   | { type: "CONFIRM_BULLET"; payload: { experienceIndex: number; bulletIndex: number; confirmed: boolean } }

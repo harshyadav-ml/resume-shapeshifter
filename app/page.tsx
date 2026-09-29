@@ -1,12 +1,8 @@
-import Link from "next/link";
-import { ArrowRight, ScanSearch, Pencil, Download, CheckCircle } from "lucide-react";
-import type { Metadata } from "next";
+"use client";
 
-export const metadata: Metadata = {
-  title: "Resume Shapeshifter — AI-Powered Resume Tailoring",
-  description:
-    "Paste your resume + job description. Get a tailored resume with match scores, gap analysis, and downloadable PDFs — all truthful.",
-};
+import Link from "next/link";
+import { ArrowRight, ScanSearch, Pencil, Download, CheckCircle, TrendingUp, Zap } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 const FEATURES = [
   {
@@ -39,6 +35,50 @@ const PRINCIPLES = [
   "Side-by-side diff so you see every change",
 ];
 
+const STATS = [
+  { label: "Avg. score improvement", value: 26, suffix: " pts", prefix: "+" },
+  { label: "Pipeline steps automated", value: 6, suffix: "", prefix: "" },
+  { label: "Confidence levels tracked", value: 3, suffix: "", prefix: "" },
+];
+
+function AnimatedCounter({ target, prefix = "", suffix = "" }: { target: number; prefix?: string; suffix?: string }) {
+  const [count, setCount] = useState(0);
+  const ref = useRef<HTMLSpanElement>(null);
+  const started = useRef(false);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && !started.current) {
+          started.current = true;
+          const duration = 1200;
+          const steps = 40;
+          const increment = target / steps;
+          let current = 0;
+          const timer = setInterval(() => {
+            current += increment;
+            if (current >= target) {
+              setCount(target);
+              clearInterval(timer);
+            } else {
+              setCount(Math.floor(current));
+            }
+          }, duration / steps);
+        }
+      },
+      { threshold: 0.5 }
+    );
+    if (ref.current) observer.observe(ref.current);
+    return () => observer.disconnect();
+  }, [target]);
+
+  return (
+    <span ref={ref} className="tabular-nums">
+      {prefix}{count}{suffix}
+    </span>
+  );
+}
+
 export default function HomePage() {
   return (
     <main className="min-h-screen page-enter">
@@ -69,7 +109,7 @@ export default function HomePage() {
             all grounded in the truth.
           </p>
 
-          {/* CTA */}
+          {/* CTAs */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link
               href="/input"
@@ -84,9 +124,26 @@ export default function HomePage() {
               id="view-demo-btn"
               className="inline-flex items-center gap-2 px-8 py-4 rounded-xl border border-border bg-card text-foreground font-semibold text-base hover:border-primary/40 hover:bg-muted/50 transition-all"
             >
-              View Demo
+              <Zap className="h-4 w-4 text-primary" />
+              Try with Sample Resume
             </a>
           </div>
+        </div>
+      </section>
+
+      {/* Stats row */}
+      <section className="border-y border-border/40 bg-card/30">
+        <div className="max-w-4xl mx-auto px-6 py-10 grid grid-cols-3 gap-6 text-center">
+          {STATS.map((stat) => (
+            <div key={stat.label}>
+              <p className="text-3xl sm:text-4xl font-extrabold gradient-text mb-1">
+                <AnimatedCounter target={stat.value} prefix={stat.prefix} suffix={stat.suffix} />
+              </p>
+              <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
+                {stat.label}
+              </p>
+            </div>
+          ))}
         </div>
       </section>
 
@@ -121,10 +178,16 @@ export default function HomePage() {
       </section>
 
       {/* Truthfulness section */}
-      <section className="max-w-5xl mx-auto px-6 py-12 mb-16">
+      <section className="max-w-5xl mx-auto px-6 py-12 mb-8">
         <div className="rounded-2xl border bg-gradient-to-br from-primary/5 via-accent/5 to-transparent p-8">
           <div className="flex flex-col md:flex-row items-start gap-8">
             <div className="flex-1">
+              <div className="flex items-center gap-2 mb-3">
+                <TrendingUp className="h-5 w-5 text-emerald-500" />
+                <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wide">
+                  Truthfulness First
+                </span>
+              </div>
               <h2 className="text-2xl font-bold mb-3">
                 Truthfulness is non-negotiable
               </h2>
@@ -152,6 +215,20 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+
+      {/* Footer */}
+      <footer className="border-t border-border/50 bg-card/20">
+        <div className="max-w-5xl mx-auto px-6 py-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-muted-foreground">
+          <div className="flex items-center gap-2">
+            <Zap className="h-4 w-4 text-primary" />
+            <span className="font-semibold text-foreground">Resume Shapeshifter</span>
+            <span>· AI-powered resume tailoring</span>
+          </div>
+          <p className="text-center sm:text-right leading-relaxed max-w-xs">
+            ⚠️ All AI suggestions must be verified for accuracy before use. Never include experience you don&apos;t have.
+          </p>
+        </div>
+      </footer>
     </main>
   );
 }

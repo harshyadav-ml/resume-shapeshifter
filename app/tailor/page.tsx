@@ -5,11 +5,13 @@ import { useRouter } from "next/navigation";
 import { useAppContext } from "@/lib/context";
 import ScoreCard from "@/components/ScoreCard";
 import SideBySideDiff from "@/components/SideBySideDiff";
-import { ArrowRight, ArrowLeft, Pencil, AlertTriangle } from "lucide-react";
+import ErrorBanner from "@/components/ErrorBanner";
+import { ArrowRight, ArrowLeft, Pencil, AlertTriangle, ShieldCheck } from "lucide-react";
 import Link from "next/link";
+import { cn } from "@/lib/utils";
 
 export default function TailorPage() {
-  const { state } = useAppContext();
+  const { state, dispatch } = useAppContext();
   const router = useRouter();
 
   useEffect(() => {
@@ -17,6 +19,52 @@ export default function TailorPage() {
       router.replace("/input");
     }
   }, [state.status, router]);
+
+  // Show skeleton while pipeline runs
+  if (state.status === "parsing") {
+    return (
+      <main className="min-h-screen max-w-6xl mx-auto px-6 py-10 page-enter">
+        <div className="mb-6">
+          <div className="h-4 w-48 bg-muted rounded-full mb-3 animate-pulse" />
+          <div className="h-9 w-72 bg-muted rounded-xl mb-2 animate-pulse" />
+          <div className="h-4 w-96 bg-muted/60 rounded-full animate-pulse" />
+        </div>
+        <div className="h-40 rounded-2xl bg-muted animate-pulse mb-6" />
+        <div className="h-24 rounded-2xl bg-muted animate-pulse mb-6" />
+        <div className="space-y-4">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="h-32 rounded-2xl bg-muted animate-pulse" />
+          ))}
+        </div>
+      </main>
+    );
+  }
+
+
+
+  // Error state
+  if (state.status === "error" && state.errors.length > 0) {
+    return (
+      <main className="min-h-screen max-w-5xl mx-auto px-6 py-10 page-enter">
+        <div className="mb-8">
+          <div className="flex items-center gap-2 text-sm text-primary font-semibold mb-2">
+            <Pencil className="h-4 w-4" />
+            Step 3 of 4 — Tailored Resume
+          </div>
+          <h1 className="text-3xl font-bold">Side-by-Side Editor</h1>
+        </div>
+        <ErrorBanner
+          title="Tailoring Pipeline Error"
+          errors={state.errors}
+          onRetry={() => {
+            dispatch({ type: "SET_ERRORS", payload: [] });
+            router.push("/input");
+          }}
+          onDismiss={() => dispatch({ type: "SET_ERRORS", payload: [] })}
+        />
+      </main>
+    );
+  }
 
   if (!state.tailoringRun || !state.tailoredResume) {
     return (
@@ -35,10 +83,23 @@ export default function TailorPage() {
 
   // Risk summary
   const allBullets = tailoredResume.tailoredExperience.flatMap((e) => e.bullets);
-  const riskBullets = allBullets.filter((b) => !!b.riskFlag);
+  const changedBullets = allBullets.filter((b) => b.original !== b.tailored);
+  const riskBullets = allBullets.filter((b) => !!b.riskFlag && b.original !== b.tailored);
   const highConfidence = allBullets.filter((b) => b.confidence === "high").length;
   const medConfidence = allBullets.filter((b) => b.confidence === "medium").length;
   const lowConfidence = allBullets.filter((b) => b.confidence === "low").length;
+
+  // Review progress
+  const reviewedCount = changedBullets.filter(
+    (b) => b.confirmed !== undefined
+  ).length;
+  const reviewProgress =
+    changedBullets.length > 0
+      ? Math.round((reviewedCount / changedBullets.length) * 100)
+      : 100;
+
+  // Partial pipeline warnings
+  const isPartial = state.status === "partial";
 
   return (
     <main className="min-h-screen max-w-6xl mx-auto px-6 py-10 page-enter">
@@ -54,6 +115,16 @@ export default function TailorPage() {
           exporting.
         </p>
       </div>
+
+      {/* Partial pipeline warning */}
+      {isPartial && state.errors.length > 0 && (
+        <ErrorBanner
+          title="Some pipeline steps had issues"
+          errors={state.errors}
+          onDismiss={() => dispatch({ type: "SET_ERRORS", payload: [] })}
+          className="mb-6"
+        />
+      )}
 
       {/* Score comparison */}
       <section className="mb-6">
@@ -94,6 +165,34 @@ export default function TailorPage() {
                 </span>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Review progress bar */}
+      {changedBullets.length > 0 && (
+        <div className="rounded-xl border bg-card px-4 py-3 mb-6">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4 text-primary" />
+              <span className="text-sm font-semibold">Review Progress</span>
+            </div>
+            <span className="text-xs text-muted-foreground">
+              {reviewedCount} / {changedBullets.length} bullets reviewed
+            </span>
+          </div>
+          <div className="h-2 rounded-full bg-muted overflow-hidden">
+            <div
+              className={cn(
+                "h-full rounded-full transition-all duration-500 ease-out",
+                reviewProgress === 100
+                  ? "bg-emerald-500"
+                  : reviewProgress > 50
+                  ? "bg-primary"
+                  : "bg-amber-500"
+              )}
+              style={{ width: `${reviewProgress}%` }}
+            />
           </div>
         </div>
       )}

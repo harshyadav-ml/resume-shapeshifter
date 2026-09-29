@@ -1,0 +1,35 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// Stores a complete tailoring run as JSON blob (fast, flexible)
+model TailoringRunRecord {
+  id          String   @id @default(cuid())
+  createdAt   DateTime @default(now())
+  jobTitle    String
+  company     String
+  originalScore Int
+  tailoredScore Int
+  runJson     String   // full TailoringRun serialized as JSON
+
+  exports     ExportedDocumentRecord[]
+}
+
+// Tracks exported PDFs
+model ExportedDocumentRecord {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  runId     String
+  type      String   // "tailored" | "comparison"
+  filename  String
+
+  run       TailoringRunRecord @relation(fields: [runId], references: [id], onDelete: Cascade)
+}
