@@ -2,19 +2,55 @@
 
 > AI-powered resume tailoring with full explainability — truthful by design.
 
-Resume Shapeshifter takes your resume and a job description, rewrites every bullet point to align with the JD, gives you a before/after match score (0–100), flags every risky suggestion, and exports two PDFs: a clean tailored resume and a full side-by-side comparison proof artifact.
+Resume Shapeshifter aligns an existing resume to a target job description, rewrites bullet points to reflect relevant requirements, provides a granular before/after match score (0–100), flags potentially unverifiable modifications, and exports two distinct artifacts: a clean tailored resume PDF and a side-by-side comparative verification PDF.
 
 ---
 
 ## Features
 
-- 🔍 **Match Scoring** — 0–100 match score with subscores (skill coverage, responsibility alignment, keyword density, seniority)
-- ✍️ **Bullet Rewriting** — Every resume bullet tailored to the JD with confidence levels (High / Medium / Low) and risk flags
-- ⚠️ **Guardrails** — All risk-flagged bullets require your explicit review before export; accept or revert individually
-- 📊 **Gap Analysis** — Structured list of missing qualifications with `canSafelyAdd` safety check
-- 📄 **PDF Export** — Tailored resume PDF + side-by-side comparison PDF, generated client-side
-- 💾 **Persistence** — All runs saved to SQLite; view history at `/history`
-- 🎭 **Demo Mode** — One-click sample data (`?demo=true`) or `Load Sample Data` button
+- **Match Scoring** — 0–100 overall compatibility score with category breakdowns: skill coverage, responsibility alignment, keyword density, and seniority fit.
+- **Bullet Rewriting** — Resume bullets tailored to target criteria with explicit confidence classifications (High / Medium / Low) and risk flags.
+- **Verification Guardrails** — All risk-flagged revisions require manual confirmation before export; modifications can be accepted or reverted individually.
+- **Gap Analysis** — Structured audit of missing qualifications with safety flags indicating whether they can be added without inflating credentials.
+- **Dual PDF Export** — Client-side generation of both an ATS-ready tailored resume and a complete before-and-after audit trail.
+- **Local Persistence** — Local run logging via SQLite, reviewable at `/history`.
+- **Demonstration Mode** — Deterministic test workflows accessible via `?demo=true` or the interface load trigger.
+
+---
+
+## Tech Stack & Dependencies
+
+### Runtime & Framework
+- **Next.js 14** (`next`, App Router architecture)
+- **React 18** (`react`, `react-dom`)
+- **TypeScript** (`typescript`, `@types/node`, `@types/react`, `@types/react-dom`)
+
+### UI, Styling & Design System
+- **Tailwind CSS** (`tailwindcss`, `postcss`, `autoprefixer`)
+- **Shadcn UI Primitives** (`@radix-ui/react-slot`, `@radix-ui/react-progress`, `@radix-ui/react-separator`, `@radix-ui/react-toast`)
+- **Styling Utilities** (`clsx`, `tailwind-merge`, `class-variance-authority`)
+- **Icons** (`lucide-react`)
+
+### AI & Data Validation
+- **Groq SDK** (`groq-sdk`) — Model: `llama-3.3-70b-versatile`
+- **Zod** (`zod`) — Strict schema extraction and validation
+
+### Document Compilation
+- **React-PDF** (`@react-pdf/renderer`) — Client-side ATS and comparison PDF export
+
+### Database & Persistence
+- **Prisma ORM** (`prisma`, `@prisma/client`)
+- **SQLite Engine** (`better-sqlite3`, `@types/better-sqlite3`)
+
+---
+
+## Setup (9 steps)
+
+### 1. Clone the repository
+
+```bash
+git clone [https://github.com/harshyadav-ml/resume-shapeshifter.git](https://github.com/harshyadav-ml/resume-shapeshifter.git)
+cd resume-shapeshifter
 
 ---
 
@@ -105,48 +141,48 @@ Visit [http://localhost:3000/history](http://localhost:3000/history) to see all 
 ```
 resume-shapeshifter/
 ├── app/
-│   ├── page.tsx              # Landing page
-│   ├── input/page.tsx        # Resume + JD input (Step 1)
-│   ├── analyze/page.tsx      # Analysis results (Step 2)
-│   ├── tailor/page.tsx       # Side-by-side editor (Step 3)
-│   ├── export/page.tsx       # PDF export (Step 4)
-│   ├── history/page.tsx      # Run history
+│   ├── page.tsx               # Landing overview
+│   ├── input/page.tsx         # Document ingestion interface
+│   ├── analyze/page.tsx       # Gap analysis and score breakdown
+│   ├── tailor/page.tsx        # Comparative bullet review workbench
+│   ├── export/page.tsx        # PDF compilation and download
+│   ├── history/page.tsx       # Session audit history
 │   └── api/
-│       ├── tailor-run/       # Full pipeline orchestrator
-│       ├── parse-resume/     # Resume parser
-│       ├── parse-jd/         # JD extractor
-│       ├── score/            # Match scorer
-│       ├── tailor/           # Bullet rewriter
-│       ├── gaps/             # Gap analyzer
-│       └── run/[id]/         # Retrieve saved run
+│       ├── tailor-run/        # Pipeline orchestration
+│       ├── parse-resume/      # Resume entity extraction
+│       ├── parse-jd/          # Job description parsing
+│       ├── score/             # Compatibility scoring
+│       ├── tailor/            # Targeted bullet refinement
+│       ├── gaps/              # Requirement gap analyzer
+│       └── run/[id]/          # Session persistence retrieval
 ├── components/
-│   ├── PipelineProgress.tsx  # Animated pipeline status
-│   ├── ScoreCard.tsx         # Before/after score ring
-│   ├── BulletCard.tsx        # Original vs tailored diff
-│   ├── SideBySideDiff.tsx    # Full experience diff
-│   ├── GapAnalysis.tsx       # Gap list with safety flags
-│   ├── ReviewGate.tsx        # Blocks export until reviewed
-│   ├── ConfidenceBadge.tsx   # High/Medium/Low badge
-│   ├── ErrorBanner.tsx       # Error + retry UI
+│   ├── PipelineProgress.tsx   # Real-time state visualization
+│   ├── ScoreCard.tsx          # Comparative score display
+│   ├── BulletCard.tsx         # Granular edit-level diff cards
+│   ├── SideBySideDiff.tsx     # Full-document comparative layout
+│   ├── GapAnalysis.tsx        # Discrepancy reporting interface
+│   ├── ReviewGate.tsx         # Safety check blocking unverified exports
+│   ├── ConfidenceBadge.tsx    # Model confidence status indicators
+│   ├── ErrorBanner.tsx        # Pipeline fault handling interface
 │   └── pdf/
 │       ├── TailoredResumePDF.tsx
 │       └── ComparisonPDF.tsx
 ├── lib/
-│   ├── groq.ts               # Groq client + Zod retry
-│   ├── schemas.ts            # Zod schemas
-│   ├── api.ts                # Client-side API wrappers
-│   ├── context.tsx           # AppContext (useReducer)
-│   ├── mock-data.ts          # Demo TailoringRun
-│   ├── db.ts                 # Prisma singleton
-│   └── prompts/              # LLM prompt templates
+│   ├── groq.ts                # Inference client & validation retry loop
+│   ├── schemas.ts             # Strict input/output Zod schemas
+│   ├── api.ts                 # Client-side API integration layer
+│   ├── context.tsx            # Global application state machine
+│   ├── mock-data.ts           # Demo payloads
+│   ├── db.ts                  # Database client singleton
+│   └── prompts/               # Structured prompt templates
 ├── prisma/
-│   ├── schema.prisma
-│   └── dev.db                # SQLite database (auto-created)
+│   ├── schema.prisma          # Data schema definition
+│   └── dev.db                 # Local SQLite database (git-ignored)
 ├── public/
-│   ├── sample-resume.txt     # Demo resume
-│   └── sample-jd.txt         # Demo job description
+│   ├── sample-resume.txt      # Reference input profile
+│   └── sample-jd.txt          # Reference job specification
 └── types/
-    └── index.ts              # TypeScript interfaces
+    └── index.ts               # Core domain TypeScript types
 ```
 
 ---
