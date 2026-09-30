@@ -64,10 +64,10 @@ export default function ResumeInput({ value, onChange, className }: ResumeInputP
       {/* Drop zone */}
       <div
         className={cn(
-          "rounded-xl border-2 border-dashed transition-all",
+          "rounded-xl border border-dashed transition-all bg-[#121216]",
           isDragging
-            ? "border-primary bg-primary/5 scale-[1.01]"
-            : "border-border/60 hover:border-primary/40",
+            ? "border-white/40 bg-white/[0.04] scale-[1.01]"
+            : "border-white/10 hover:border-white/20",
         )}
         onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
         onDragLeave={() => setIsDragging(false)}
@@ -80,7 +80,7 @@ export default function ResumeInput({ value, onChange, className }: ResumeInputP
           placeholder="Paste your resume here (plain text)...
 
 Or drag & drop a .txt, .pdf, or .docx file above."
-          className="min-h-[300px] border-0 bg-transparent resize-none focus-visible:ring-0 font-mono text-sm leading-relaxed rounded-xl"
+          className="min-h-[300px] border-0 bg-transparent text-zinc-100 placeholder:text-zinc-500 resize-none focus-visible:ring-0 font-mono text-sm leading-relaxed rounded-xl"
           aria-label="Resume text input"
         />
       </div>

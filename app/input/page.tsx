@@ -111,24 +111,30 @@ function InputPageInner() {
 
   return (
     <main className="min-h-screen max-w-6xl mx-auto px-6 py-10 page-enter">
-      {/* Header */}
+
+      {/* ── Page header ──────────────────────────────────────────── */}
       <div className="mb-8">
-        <div className="flex items-center gap-2 text-sm text-primary font-semibold mb-2">
+        {/* Step indicator */}
+        <div className="flex items-center gap-2 text-sm text-zinc-500 font-mono mb-3">
           <Sparkles className="h-4 w-4" />
           Step 1 of 4 — Input
         </div>
-        <h1 className="text-3xl font-bold">Paste your Resume &amp; JD</h1>
-        <p className="text-muted-foreground mt-1">
+
+        <h1 className="font-display text-3xl font-bold text-white tracking-tight">
+          Paste your Resume &amp; JD
+        </h1>
+        <p className="text-zinc-500 mt-1 text-sm">
           Provide both inputs below. The analysis will match your resume against the job description.
         </p>
-        {/* Load Sample Data button */}
-        <div className="mt-3">
+
+        {/* Load Sample Data */}
+        <div className="mt-4">
           <button
             type="button"
             id="load-sample-btn"
             onClick={loadSampleData}
             disabled={isLoadingSample || isAnalyzing}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-primary/30 bg-primary/5 text-primary text-sm font-semibold hover:bg-primary/10 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-white/10 bg-white/[0.03] text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.06] text-sm font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {isLoadingSample ? (
               <>
@@ -145,15 +151,17 @@ function InputPageInner() {
         </div>
       </div>
 
-      {/* Inputs */}
-      <div className="grid lg:grid-cols-2 gap-6 mb-8">
-        <div className="rounded-2xl border bg-card p-6">
+      {/* ── Input panels ─────────────────────────────────────────── */}
+      <div className="grid lg:grid-cols-2 gap-4 mb-8">
+        {/* Resume panel */}
+        <div className="rounded-2xl border border-white/[0.07] bg-[#141418] p-6">
           <ResumeInput
             value={state.resumeRaw}
             onChange={(text) => dispatch({ type: "SET_RESUME_RAW", payload: text })}
           />
         </div>
-        <div className="rounded-2xl border bg-card p-6">
+        {/* JD panel */}
+        <div className="rounded-2xl border border-white/[0.07] bg-[#141418] p-6">
           <JDInput
             value={state.jdRaw}
             onChange={(text) => dispatch({ type: "SET_JD_RAW", payload: text })}
@@ -161,14 +169,14 @@ function InputPageInner() {
         </div>
       </div>
 
-      {/* Actions */}
+      {/* ── Actions row ──────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
         <button
           type="button"
           id="analyze-btn"
           disabled={!canAnalyze || isAnalyzing}
           onClick={handleAnalyze}
-          className="flex items-center gap-2 px-7 py-3.5 rounded-xl bg-primary text-primary-foreground font-bold text-base hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+          className="flex items-center gap-2 px-7 py-3.5 rounded-full bg-zinc-100 text-zinc-950 font-semibold text-sm hover:bg-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {isAnalyzing ? (
             <>
@@ -178,33 +186,33 @@ function InputPageInner() {
           ) : (
             <>
               Analyze
-              <ArrowRight className="h-5 w-5" />
+              <ArrowRight className="h-4 w-4" />
             </>
           )}
         </button>
 
         {pipelineStatus && isAnalyzing && (
-          <p className="text-sm text-primary animate-pulse">
+          <p className="text-sm text-zinc-500 animate-pulse font-mono">
             {pipelineStatus}
           </p>
         )}
 
         {!canAnalyze && !isAnalyzing && (
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-zinc-600">
             Please add both a resume and job description to continue.
           </p>
         )}
       </div>
 
-      {/* Sample data toast */}
+      {/* ── Sample data toast ─────────────────────────────────────── */}
       {sampleToast && (
-        <div className="mt-3 flex items-center gap-2 text-sm font-medium text-emerald-600 dark:text-emerald-400 animate-in fade-in slide-in-from-bottom-1 duration-300">
+        <div className="mt-3 flex items-center gap-2 text-sm font-medium text-emerald-400 animate-fade-in">
           <CheckCircle2 className="h-4 w-4 shrink-0" />
           {sampleToast}
         </div>
       )}
 
-      {/* Error Display */}
+      {/* ── Error display ─────────────────────────────────────────── */}
       {state.status === "error" && state.errors.length > 0 && (
         <ErrorBanner
           title="Analysis failed"
@@ -215,6 +223,7 @@ function InputPageInner() {
         />
       )}
 
+      {/* ── Disclaimer ────────────────────────────────────────────── */}
       <div className="mt-8">
         <DisclaimerBanner />
       </div>
@@ -227,7 +236,7 @@ export default function InputPage() {
     <Suspense
       fallback={
         <div className="min-h-screen flex items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <Loader2 className="h-8 w-8 animate-spin text-zinc-500" />
         </div>
       }
     >

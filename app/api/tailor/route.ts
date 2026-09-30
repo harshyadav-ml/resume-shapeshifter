@@ -5,6 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+export const maxDuration = 60;
 import { callGroq } from "@/lib/groq";
 import { RewrittenBulletSchema } from "@/lib/schemas";
 import {

@@ -8,30 +8,48 @@
 ## Overview
 
 ```mermaid
+%%{init: {
+  'theme': 'base',
+  'themeVariables': {
+    'primaryColor': '#38bdf8',
+    'primaryTextColor': '#0f172a',
+    'primaryBorderColor': '#0284c7',
+    'lineColor': '#e2e8f0',
+    'secondaryColor': '#f8fafc',
+    'tertiaryColor': '#f1f5f9',
+    'fontFamily': 'Inter, system-ui, sans-serif'
+  }
+}}%%
 gantt
     title Resume Shapeshifter — 5-Phase Implementation
     dateFormat  YYYY-MM-DD
-    section Phase 1
-    Project Setup & UI Shell           :p1a, 2026-10-01, 2d
-    Mock Data & State Management       :p1b, after p1a, 2d
-    Side-by-side Preview (mocked)      :p1c, after p1b, 1d
-    section Phase 2
+    axisFormat  %b %d
+
+    section Phase 1: Setup
+    Project Setup & UI                 :p1a, 2026-10-01, 2d
+    Mock Data & State                  :p1b, after p1a, 2d
+    Side-by-side Preview               :p1c, after p1b, 1d
+
+    section Phase 2: LLMs
     Groq SDK & Zod Setup               :p2a, 2026-10-08, 1d
-    JD + Resume Parsing Prompts        :p2b, after p2a, 2d
-    Scoring + Tailoring Prompts        :p2c, after p2b, 2d
-    section Phase 3
-    Tailored Resume PDF             Implement phase 2 as per the [implementation_plan.md](file;file:///Users/harsh/Downloads/resume-shapeshifter/docs/implementation_plan.md)    :p3a, 2026-10-15, 2d
+    Parsing Prompts                    :p2b, after p2a, 2d
+    Scoring Prompts                    :p2c, after p2b, 2d
+
+    section Phase 3: PDF
+    Tailored Resume PDF                :p3a, 2026-10-15, 2d
     Side-by-side Comparison PDF        :p3b, after p3a, 2d
     Export API Routes                  :p3c, after p3b, 1d
-    section Phase 4
-    Risk Flags + Confidence UI         :p4a, 2026-10-22, 2d
-    User Review + Confirmation Flow    :p4b, after p4a, 2d
+
+    section Phase 4: Guardrails
+    Risk Flags & Confidence UI         :p4a, 2026-10-22, 2d
+    Review & Confirmation Flow         :p4b, after p4a, 2d
     JSON Schema Validation             :p4c, after p4b, 1d
-    section Phase 5
-    Sample Data + Demo Mode            :p5a, 2026-10-29, 1d
-    Loading States + Error Handling    :p5b, after p5a, 2d
+
+    section Phase 5: Polish
+    Sample Data & Demo Mode            :p5a, 2026-10-29, 1d
+    Loading States & Errors            :p5b, after p5a, 2d
     SQLite Persistence                 :p5c, after p5b, 1d
-    Final Polish + Demo Readiness      :p5d, after p5c, 1d
+    Final Polish & Demo Ready          :p5d, after p5c, 1d
 ```
 
 ---
@@ -810,20 +828,69 @@ README.md
 ## Dependency Map
 
 ```mermaid
-graph TD
-    P1["Phase 1\nStatic Prototype"] --> P2["Phase 2\nLLM Integration"]
-    P2 --> P3["Phase 3\nPDF Export"]
-    P2 --> P4["Phase 4\nGuardrails"]
-    P3 --> P4
-    P4 --> P5["Phase 5\nPolish & Demo"]
+flowchart TB
+    classDef client fill:#0f172a,stroke:#38bdf8,stroke-width:2px,color:#f8fafc;
+    classDef orchestrator fill:#1e1b4b,stroke:#818cf8,stroke-width:2px,color:#f8fafc;
+    classDef parallel fill:#064e3b,stroke:#34d399,stroke-width:2px,color:#f8fafc;
+    classDef sequential fill:#451a03,stroke:#fbbf24,stroke-width:2px,color:#f8fafc;
+    classDef output fill:#1e293b,stroke:#f472b6,stroke-width:2px,color:#f8fafc;
+    classDef db fill:#1e293b,stroke:#94a3b8,stroke-width:1px,color:#cbd5e1;
 
-    P1 --> T["types/index.ts\n(all interfaces)"]
-    P1 --> C["AppContext\n(global state)"]
-    P2 --> S["lib/schemas.ts\n(Zod validation)"]
-    P2 --> A["lib/api.ts\n(typed fetchers)"]
-    P3 --> PDF["lib/pdf.ts\n(React PDF)"]
-    P4 --> RG["ReviewGate\n(confirmation flow)"]
-    P5 --> DB["lib/db.ts\n(Prisma + SQLite)"]
+    subgraph ClientLayer ["1. UI & Client Layer (Next.js 14)"]
+        UI["Obsidian Dark UI\n(Tailwind + Shadcn)"]
+        Inputs["Resume & JD Text Input"]
+        ReviewGate["Review Gate\n(Accept / Revert Changes)"]
+    end
+
+    subgraph OrchestratorLayer ["2. Serverless Orchestrator (maxDuration = 60s)"]
+        Runner["POST /api/tailor-run\n(Pipeline Coordinator)"]
+    end
+
+    subgraph LLMPipeline ["3. Hybrid Groq AI Pipeline (Llama 3.3 70B + Zod)"]
+        subgraph Step1 ["Step 1: Parallel Extraction"]
+            direction LR
+            P1["Parse Resume\n(JSON)"]:::parallel
+            P2["Parse JD\n(JSON)"]:::parallel
+        end
+
+        subgraph Step2 ["Step 2: Baseline Scoring"]
+            S1["Initial Match Score\n(0-100 & Breakdown)"]:::sequential
+        end
+
+        subgraph Step3 ["Step 3: Staggered Parallel Processing"]
+            direction LR
+            B1["Bullet Rewriter\n(50ms Staggered calls)"]:::parallel
+            B2["Gap Analysis\n(Missing skills & suggestions)"]:::parallel
+        end
+
+        subgraph Step4 ["Step 4: Final Verification"]
+            S2["Tailored Match Score\n(Updated 0-100)"]:::sequential
+        end
+    end
+
+    subgraph StorageLayer ["4. Persistence Layer"]
+        Prisma["Prisma ORM"]:::db
+        Database[("SQLite Local DB\nRuns & Export History")]:::db
+    end
+
+    subgraph ExportLayer ["5. Document Generation"]
+        PDF1["Tailored ATS Resume PDF\n(@react-pdf/renderer)"]:::output
+        PDF2["Comparison Proof PDF\n(Side-by-Side Diff)"]:::output
+    end
+
+    Inputs -->|Submit data| Runner
+    Runner --> Step1
+    P1 & P2 -->|Validated Profiles| S1
+    S1 --> Step3
+    B1 & B2 -->|Tailored Bullets & Gaps| S2
+    S2 -->|Assemble TailoringRun| Runner
+    Runner -->|Save run record| Prisma --> Database
+    Runner -->|Return payload| ReviewGate
+    ReviewGate -->|Confirmed bullets| PDF1
+    ReviewGate -->|Side-by-side verification| PDF2
+
+    class UI,Inputs,ReviewGate client;
+    class Runner orchestrator;
 ```
 
 ---

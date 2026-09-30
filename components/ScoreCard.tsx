@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { MatchScore } from "@/types";
 import { cn } from "@/lib/utils";
+import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 
+/* ── Props (UNCHANGED) ───────────────────────────────────────── */
 interface ScoreCardProps {
   originalScore: MatchScore;
   tailoredScore?: MatchScore;
@@ -11,59 +13,85 @@ interface ScoreCardProps {
   showBoth?: boolean;
 }
 
-const CIRCUMFERENCE = 2 * Math.PI * 90; // r=90
+/* ── Constants ───────────────────────────────────────────────── */
+const R = 88;
+const CIRCUMFERENCE = 2 * Math.PI * R;
 
-function ScoreRing({
+/* ── Score colour thresholds ──────────────────────────────────── */
+function scoreColor(s: number): { stroke: string; text: string; bg: string; glow: string } {
+  if (s >= 80) return {
+    stroke: "#10b981",
+    text:   "text-emerald-400",
+    bg:     "bg-emerald-500/10",
+    glow:   "shadow-glow-emerald",
+  };
+  if (s >= 60) return {
+    stroke: "#f59e0b",
+    text:   "text-amber-400",
+    bg:     "bg-amber-500/10",
+    glow:   "shadow-glow-amber",
+  };
+  return {
+    stroke: "#ef4444",
+    text:   "text-red-400",
+    bg:     "bg-red-500/10",
+    glow:   "",
+  };
+}
+
+/* ── Animated counter hook ────────────────────────────────────── */
+function useCounter(target: number, duration = 1300) {
+  const [value, setValue] = useState(0);
+  const [started, setStarted] = useState(false);
+
+  useEffect(() => {
+    const t = setTimeout(() => setStarted(true), 120);
+    return () => clearTimeout(t);
+  }, []);
+
+  useEffect(() => {
+    if (!started) return;
+    let raf: number;
+    const start = performance.now();
+    const from = 0;
+
+    function tick(now: number) {
+      const progress = Math.min((now - start) / duration, 1);
+      // Ease-out cubic
+      const ease = 1 - Math.pow(1 - progress, 3);
+      setValue(Math.round(from + (target - from) * ease));
+      if (progress < 1) raf = requestAnimationFrame(tick);
+    }
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [started, target, duration]);
+
+  return value;
+}
+
+/* ── Single gauge ring ───────────────────────────────────────── */
+function GaugeRing({
   score,
   label,
-  color,
   size = 200,
 }: {
   score: number;
   label: string;
-  color: string;
   size?: number;
 }) {
-  const [displayed, setDisplayed] = useState(0);
   const [animated, setAnimated] = useState(false);
-  const ref = useRef<SVGCircleElement>(null);
-
+  const displayed = useCounter(score, 1300);
+  const colors = scoreColor(score);
   const offset = CIRCUMFERENCE - (score / 100) * CIRCUMFERENCE;
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setAnimated(true);
-    }, 100);
-    return () => clearTimeout(timer);
+    const t = setTimeout(() => setAnimated(true), 80);
+    return () => clearTimeout(t);
   }, []);
 
-  // Animate counter
-  useEffect(() => {
-    if (!animated) return;
-    let start = 0;
-    const end = score;
-    const duration = 1200;
-    const step = (end / duration) * 16;
-    const interval = setInterval(() => {
-      start += step;
-      if (start >= end) {
-        setDisplayed(end);
-        clearInterval(interval);
-      } else {
-        setDisplayed(Math.floor(start));
-      }
-    }, 16);
-    return () => clearInterval(interval);
-  }, [animated, score]);
-
-  const getScoreColor = (s: number) => {
-    if (s >= 80) return "text-emerald-500";
-    if (s >= 60) return "text-amber-500";
-    return "text-red-500";
-  };
-
   return (
-    <div className="flex flex-col items-center gap-2">
+    <div className="flex flex-col items-center gap-3">
+      {/* Ring */}
       <div className="relative" style={{ width: size, height: size }}>
         <svg
           width={size}
@@ -72,180 +100,228 @@ function ScoreRing({
           className="-rotate-90"
           aria-label={`${label}: ${score} out of 100`}
         >
-          {/* Background ring */}
+          {/* Outer decorative tick marks */}
+          {Array.from({ length: 36 }).map((_, i) => {
+            const angle = (i * 10 * Math.PI) / 180;
+            const cx = 100 + 96 * Math.cos(angle);
+            const cy = 100 + 96 * Math.sin(angle);
+            const ix = 100 + 88 * Math.cos(angle);
+            const iy = 100 + 88 * Math.sin(angle);
+            return (
+              <line
+                key={i}
+                x1={ix} y1={iy} x2={cx} y2={cy}
+                stroke="hsl(220 100% 100% / 0.06)"
+                strokeWidth={i % 9 === 0 ? "2" : "1"}
+                strokeLinecap="round"
+              />
+            );
+          })}
+          {/* Background track */}
           <circle
-            cx="100"
-            cy="100"
-            r="90"
+            cx="100" cy="100" r={R}
             fill="none"
-            stroke="currentColor"
-            strokeWidth="12"
-            className="text-muted/30"
+            stroke="hsl(222 28% 12%)"
+            strokeWidth="14"
           />
-          {/* Score ring */}
+          {/* Track inner shadow */}
           <circle
-            ref={ref}
-            cx="100"
-            cy="100"
-            r="90"
+            cx="100" cy="100" r={R}
             fill="none"
-            stroke={color}
-            strokeWidth="12"
+            stroke="hsl(0 0% 0% / 0.4)"
+            strokeWidth="16"
+            strokeDasharray="4 2"
+            opacity="0.3"
+          />
+          {/* Score arc */}
+          <circle
+            cx="100" cy="100" r={R}
+            fill="none"
+            stroke={colors.stroke}
+            strokeWidth="14"
             strokeLinecap="round"
             strokeDasharray={CIRCUMFERENCE}
             strokeDashoffset={animated ? offset : CIRCUMFERENCE}
             style={{
-              transition: "stroke-dashoffset 1.2s cubic-bezier(0.4, 0, 0.2, 1)",
+              transition: "stroke-dashoffset 1.3s cubic-bezier(0.34, 1.56, 0.64, 1)",
+              filter: `drop-shadow(0 0 8px ${colors.stroke}66)`,
             }}
           />
         </svg>
+
         {/* Center content */}
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span
-            className={cn(
-              "text-4xl font-bold tabular-nums",
-              getScoreColor(score)
-            )}
-          >
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-0.5">
+          <span className={cn("text-[2.6rem] font-black tabular-nums leading-none tracking-tight", colors.text)}>
             {displayed}
           </span>
-          <span className="text-xs text-muted-foreground font-medium mt-0.5">/ 100</span>
+          <span className="text-[11px] font-semibold text-muted-foreground/60 tracking-widest uppercase">
+            / 100
+          </span>
         </div>
       </div>
-      <span className="text-sm font-semibold text-muted-foreground tracking-wide uppercase">
+
+      {/* Label pill */}
+      <div className={cn(
+        "px-3 py-1 rounded-full text-[11px] font-bold tracking-widest uppercase border",
+        label === "Original"
+          ? "bg-muted/40 border-border text-muted-foreground"
+          : "bg-emerald-500/10 border-emerald-500/25 text-emerald-400"
+      )}>
         {label}
-      </span>
+      </div>
     </div>
   );
 }
 
+/* ── Sub-score bar ───────────────────────────────────────────── */
+function SubScoreBar({ label, original, tailored, showBoth }: {
+  label: string;
+  original: number;
+  tailored?: number;
+  showBoth: boolean;
+}) {
+  const [animated, setAnimated] = useState(false);
+  useEffect(() => { const t = setTimeout(() => setAnimated(true), 300); return () => clearTimeout(t); }, []);
+
+  const displayVal = showBoth && tailored != null ? tailored : original;
+  const delta = tailored != null && showBoth ? tailored - original : 0;
+  const colors = scoreColor(displayVal);
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] font-semibold text-muted-foreground/70 uppercase tracking-wider">{label}</span>
+        <div className="flex items-center gap-1.5">
+          <span className={cn("text-sm font-bold tabular-nums", colors.text)}>{displayVal}</span>
+          {showBoth && delta !== 0 && (
+            <span className={cn(
+              "text-[10px] font-bold rounded px-1",
+              delta > 0 ? "text-emerald-400 bg-emerald-500/10" : "text-red-400 bg-red-500/10"
+            )}>
+              {delta > 0 ? "+" : ""}{delta}
+            </span>
+          )}
+        </div>
+      </div>
+      {/* Track */}
+      <div className="h-1 rounded-full bg-muted/40 overflow-hidden">
+        <div
+          className="h-full rounded-full transition-all duration-1000 ease-smooth"
+          style={{
+            width: animated ? `${displayVal}%` : "0%",
+            background: colors.stroke,
+            boxShadow: `0 0 6px ${colors.stroke}66`,
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+/* ── Main component (PROPS UNCHANGED) ────────────────────────── */
 export default function ScoreCard({
   originalScore,
   tailoredScore,
   className,
   showBoth = false,
 }: ScoreCardProps) {
-  const improvement =
-    tailoredScore
-      ? tailoredScore.overallScore - originalScore.overallScore
-      : null;
+  const improvement = tailoredScore
+    ? tailoredScore.overallScore - originalScore.overallScore
+    : null;
 
   return (
-    <div
-      className={cn(
-        "rounded-2xl border bg-card p-6 shadow-sm",
-        className
-      )}
-    >
-      <div className="flex flex-col sm:flex-row items-center justify-center gap-8">
-        <ScoreRing
-          score={originalScore.overallScore}
-          label="Original"
-          color="hsl(220 20% 70%)"
-        />
+    <div className={cn(
+      "relative rounded-2xl overflow-hidden",
+      "bg-card border border-border/60",
+      "shadow-surface-2",
+      "before:absolute before:inset-0 before:bg-mesh-subtle before:pointer-events-none",
+      className
+    )}>
+      {/* Inner top highlight */}
+      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
 
-        {showBoth && tailoredScore && (
-          <>
-            {/* Arrow + improvement */}
-            <div className="flex flex-col items-center gap-1">
-              {improvement !== null && improvement > 0 && (
-                <span className="text-xs font-bold text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-2 py-0.5">
-                  +{improvement} pts
-                </span>
-              )}
-              <svg
-                viewBox="0 0 40 16"
-                className="w-10 h-4 text-muted-foreground hidden sm:block"
-              >
-                <path
-                  d="M0 8 H35 M28 2 L36 8 L28 14"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </div>
-            <ScoreRing
-              score={tailoredScore.overallScore}
-              label="Tailored"
-              color="hsl(142 70% 48%)"
-            />
-          </>
-        )}
-      </div>
+      <div className="relative z-10 p-6 space-y-6">
+        {/* Rings row */}
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-10">
+          <GaugeRing score={originalScore.overallScore} label="Original" size={192} />
 
-      {/* Explanation */}
-      <div className="mt-6 border-t pt-4">
-        <p className="text-sm text-muted-foreground leading-relaxed">
+          {showBoth && tailoredScore && (
+            <>
+              {/* Middle connector */}
+              <div className="flex flex-col items-center gap-2 sm:mt-0 -mt-2">
+                {improvement !== null && (
+                  <div className={cn(
+                    "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border",
+                    improvement > 0
+                      ? "bg-emerald-500/10 border-emerald-500/25 text-emerald-400"
+                      : improvement < 0
+                      ? "bg-red-500/10 border-red-500/25 text-red-400"
+                      : "bg-muted border-border text-muted-foreground"
+                  )}>
+                    {improvement > 0 ? (
+                      <TrendingUp className="h-3.5 w-3.5" />
+                    ) : improvement < 0 ? (
+                      <TrendingDown className="h-3.5 w-3.5" />
+                    ) : (
+                      <Minus className="h-3.5 w-3.5" />
+                    )}
+                    {improvement > 0 && "+"}{improvement} pts
+                  </div>
+                )}
+                {/* Arrow */}
+                <svg viewBox="0 0 48 16" className="w-12 h-4 text-border hidden sm:block" fill="none">
+                  <path d="M0 8 H40 M33 2 L42 8 L33 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </div>
+              <GaugeRing score={tailoredScore.overallScore} label="Tailored" size={192} />
+            </>
+          )}
+        </div>
+
+        {/* Explanation */}
+        <div className="separator-gradient" />
+        <p className="text-sm text-muted-foreground/80 leading-relaxed">
           {(showBoth && tailoredScore?.explanation) || originalScore.explanation}
         </p>
-      </div>
 
-      {/* Sub-scores */}
-      <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {[
-          {
-            label: "Skills",
-            original: originalScore.skillCoverageScore,
-            tailored: tailoredScore?.skillCoverageScore,
-          },
-          {
-            label: "Responsibilities",
-            original: originalScore.responsibilityAlignmentScore,
-            tailored: tailoredScore?.responsibilityAlignmentScore,
-          },
-          {
-            label: "Keywords",
-            original: originalScore.keywordScore,
-            tailored: tailoredScore?.keywordScore,
-          },
-          {
-            label: "Seniority",
-            original: originalScore.seniorityScore,
-            tailored: tailoredScore?.seniorityScore,
-          },
-        ].map((item) => (
-          <div key={item.label} className="rounded-xl bg-muted/50 px-3 py-2 text-center">
-            <div className="text-xs text-muted-foreground font-medium mb-1">{item.label}</div>
-            <div className="flex items-center justify-center gap-1">
-              <span className="text-sm font-bold">{showBoth && item.tailored ? item.tailored : item.original}</span>
-              {showBoth && item.tailored && item.tailored !== item.original && (
+        {/* Sub-scores */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          {[
+            { label: "Skills",          original: originalScore.skillCoverageScore,          tailored: tailoredScore?.skillCoverageScore },
+            { label: "Responsibilities",original: originalScore.responsibilityAlignmentScore, tailored: tailoredScore?.responsibilityAlignmentScore },
+            { label: "Keywords",        original: originalScore.keywordScore,                 tailored: tailoredScore?.keywordScore },
+            { label: "Seniority",       original: originalScore.seniorityScore,               tailored: tailoredScore?.seniorityScore },
+          ].map((item) => (
+            <div key={item.label} className="rounded-xl bg-muted/20 border border-border/40 px-3 py-3">
+              <SubScoreBar
+                label={item.label}
+                original={item.original}
+                tailored={item.tailored}
+                showBoth={showBoth}
+              />
+            </div>
+          ))}
+        </div>
+
+        {/* Critical gaps */}
+        {originalScore.criticalMissingRequirements.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-[11px] font-bold text-muted-foreground/60 uppercase tracking-widest">
+              Critical Gaps
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {originalScore.criticalMissingRequirements.map((req) => (
                 <span
-                  className={cn(
-                    "text-[10px] font-semibold",
-                    item.tailored > item.original
-                      ? "text-emerald-500"
-                      : "text-red-500"
-                  )}
+                  key={req}
+                  className="chip bg-red-500/8 text-red-400 border border-red-500/20"
                 >
-                  ({item.tailored > item.original ? "+" : ""}{item.tailored - item.original})
+                  {req}
                 </span>
-              )}
+              ))}
             </div>
           </div>
-        ))}
+        )}
       </div>
-
-      {/* Missing requirements */}
-      {originalScore.criticalMissingRequirements.length > 0 && (
-        <div className="mt-4">
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-            Critical Gaps
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {originalScore.criticalMissingRequirements.map((req) => (
-              <span
-                key={req}
-                className="chip text-[11px] bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20"
-              >
-                {req}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

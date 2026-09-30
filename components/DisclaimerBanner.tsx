@@ -14,8 +14,8 @@ export default function DisclaimerBanner({ className }: DisclaimerBannerProps) {
       aria-live="polite"
       className={cn(
         "w-full flex items-start gap-3 rounded-xl px-4 py-3.5",
-        "bg-amber-500/10 border border-amber-500/30",
-        "text-amber-700 dark:text-amber-400",
+        "bg-amber-500/[0.04] border border-amber-500/20",
+        "text-amber-200",
         className
       )}
     >

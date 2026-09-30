@@ -48,47 +48,69 @@
 ## 2. High-Level Architecture Diagram
 
 ```mermaid
-graph TB
-    subgraph Client["🖥️ Client (Browser)"]
-        UI["Next.js Frontend\n(React + TypeScript + Tailwind)"]
+flowchart TB
+    classDef client fill:#0f172a,stroke:#38bdf8,stroke-width:2px,color:#f8fafc;
+    classDef orchestrator fill:#1e1b4b,stroke:#818cf8,stroke-width:2px,color:#f8fafc;
+    classDef parallel fill:#064e3b,stroke:#34d399,stroke-width:2px,color:#f8fafc;
+    classDef sequential fill:#451a03,stroke:#fbbf24,stroke-width:2px,color:#f8fafc;
+    classDef output fill:#1e293b,stroke:#f472b6,stroke-width:2px,color:#f8fafc;
+    classDef db fill:#1e293b,stroke:#94a3b8,stroke-width:1px,color:#cbd5e1;
+
+    subgraph ClientLayer ["1. UI & Client Layer (Next.js 14)"]
+        UI["Obsidian Dark UI\n(Tailwind + Shadcn)"]
+        Inputs["Resume & JD Text Input"]
+        ReviewGate["Review Gate\n(Accept / Revert Changes)"]
     end
 
-    subgraph NextAPI["⚡ Next.js API Layer (Node.js)"]
-        R1["/api/parse-resume"]
-        R2["/api/parse-jd"]
-        R3["/api/score"]
-        R4["/api/tailor"]
-        R5["/api/gaps"]
-        O["/api/tailor-run"]
+    subgraph OrchestratorLayer ["2. Serverless Orchestrator (maxDuration = 60s)"]
+        Runner["POST /api/tailor-run\n(Pipeline Coordinator)"]
     end
 
-    subgraph LLMService["🧠 LLM Integration (lib/groq.ts)"]
-        P1["JD Extraction"]
-        P2["Resume Parser"]
-        P3["Match Scoring"]
-        P4["Bullet Rewriter"]
-        P5["Gap Analysis"]
+    subgraph LLMPipeline ["3. Hybrid Groq AI Pipeline (Llama 3.3 70B + Zod)"]
+        subgraph Step1 ["Step 1: Parallel Extraction"]
+            direction LR
+            P1["Parse Resume\n(JSON)"]:::parallel
+            P2["Parse JD\n(JSON)"]:::parallel
+        end
+
+        subgraph Step2 ["Step 2: Baseline Scoring"]
+            S1["Initial Match Score\n(0-100 & Breakdown)"]:::sequential
+        end
+
+        subgraph Step3 ["Step 3: Staggered Parallel Processing"]
+            direction LR
+            B1["Bullet Rewriter\n(50ms Staggered calls)"]:::parallel
+            B2["Gap Analysis\n(Missing skills & suggestions)"]:::parallel
+        end
+
+        subgraph Step4 ["Step 4: Final Verification"]
+            S2["Tailored Match Score\n(Updated 0-100)"]:::sequential
+        end
     end
 
-    subgraph PDFGen["🖨️ PDF Generator"]
-        PG1["Tailored Resume PDF\n(React PDF / @react-pdf/renderer)"]
-        PG2["Side-by-Side Comparison\n(React PDF or HTML Print)"]
+    subgraph StorageLayer ["4. Persistence Layer"]
+        Prisma["Prisma ORM"]:::db
+        Database[("SQLite Local DB\nRuns & Export History")]:::db
     end
 
-    subgraph Storage["🗄️ Storage Layer"]
-        S1["Session Storage (MVP)"]
-        S2["SQLite / Prisma (Persistent)"]
+    subgraph ExportLayer ["5. Document Generation"]
+        PDF1["Tailored ATS Resume PDF\n(@react-pdf/renderer)"]:::output
+        PDF2["Comparison Proof PDF\n(Side-by-Side Diff)"]:::output
     end
 
-    subgraph GroqCloud["⚡ Groq Cloud API"]
-        GC["Llama 3.3 70B Versatile\n(JSON Mode · ~1200 tok/s)"]
-    end
+    Inputs -->|Submit data| Runner
+    Runner --> Step1
+    P1 & P2 -->|Validated Profiles| S1
+    S1 --> Step3
+    B1 & B2 -->|Tailored Bullets & Gaps| S2
+    S2 -->|Assemble TailoringRun| Runner
+    Runner -->|Save run record| Prisma --> Database
+    Runner -->|Return payload| ReviewGate
+    ReviewGate -->|Confirmed bullets| PDF1
+    ReviewGate -->|Side-by-side verification| PDF2
 
-    UI -->|"REST / JSON"| NextAPI
-    NextAPI --> LLMService
-    NextAPI --> PDFGen
-    NextAPI --> Storage
-    LLMService --> GroqCloud
+    class UI,Inputs,ReviewGate client;
+    class Runner orchestrator;
 ```
 
 ---

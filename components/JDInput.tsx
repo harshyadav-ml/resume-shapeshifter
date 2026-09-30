@@ -71,7 +71,7 @@ export default function JDInput({ value, onChange, className }: JDInputProps) {
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder="Paste the full job description here..."
-        className="min-h-[300px] resize-none font-mono text-sm leading-relaxed"
+        className="min-h-[300px] resize-none font-mono text-sm leading-relaxed bg-[#121216] border-white/10 text-zinc-100 placeholder:text-zinc-500 rounded-xl"
         aria-label="Job description text input"
       />
 
@@ -80,7 +80,7 @@ export default function JDInput({ value, onChange, className }: JDInputProps) {
         type="button"
         id="load-example-jd"
         onClick={() => onChange(MOCK_JD)}
-        className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-accent/10 text-accent hover:bg-accent/20 border border-accent/20 transition-all"
+        className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-white/5 text-zinc-300 hover:text-white hover:bg-white/10 border border-white/10 transition-all"
       >
         <Clipboard className="h-3.5 w-3.5" />
         Paste Example JD
