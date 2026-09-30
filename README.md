@@ -18,42 +18,6 @@ Resume Shapeshifter aligns an existing resume to a target job description, rewri
 
 ---
 
-## Tech Stack & Dependencies
-
-### Runtime & Framework
-- **Next.js 14** (`next`, App Router architecture)
-- **React 18** (`react`, `react-dom`)
-- **TypeScript** (`typescript`, `@types/node`, `@types/react`, `@types/react-dom`)
-
-### UI, Styling & Design System
-- **Tailwind CSS** (`tailwindcss`, `postcss`, `autoprefixer`)
-- **Shadcn UI Primitives** (`@radix-ui/react-slot`, `@radix-ui/react-progress`, `@radix-ui/react-separator`, `@radix-ui/react-toast`)
-- **Styling Utilities** (`clsx`, `tailwind-merge`, `class-variance-authority`)
-- **Icons** (`lucide-react`)
-
-### AI & Data Validation
-- **Groq SDK** (`groq-sdk`) — Model: `llama-3.3-70b-versatile`
-- **Zod** (`zod`) — Strict schema extraction and validation
-
-### Document Compilation
-- **React-PDF** (`@react-pdf/renderer`) — Client-side ATS and comparison PDF export
-
-### Database & Persistence
-- **Prisma ORM** (`prisma`, `@prisma/client`)
-- **SQLite Engine** (`better-sqlite3`, `@types/better-sqlite3`)
-
----
-
-## Setup (9 steps)
-
-### 1. Clone the repository
-
-```bash
-git clone [https://github.com/harshyadav-ml/resume-shapeshifter.git](https://github.com/harshyadav-ml/resume-shapeshifter.git)
-cd resume-shapeshifter
-
----
-
 ## Tech Stack
 
 | Layer | Tech |
@@ -73,7 +37,7 @@ cd resume-shapeshifter
 ### 1. Clone the repository
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/harshyadav-ml/resume-shapeshifter.git
 cd resume-shapeshifter
 ```
 
