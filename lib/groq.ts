@@ -50,7 +50,7 @@ export async function callGroq<T>(
 ): Promise<T> {
   const {
     model = "qwen/qwen3.8-27b",
-    temperature = 0.2,
+    temperature = 0, // 0 = fully deterministic; same input always yields same output
     maxRetries = 3,
     maxTokens = 4096,
   } = opts;

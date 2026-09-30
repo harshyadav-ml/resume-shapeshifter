@@ -121,8 +121,7 @@ export async function POST(request: NextRequest) {
               exp.title,
               jdProfile as unknown as Record<string, unknown>
             ),
-            RewrittenBulletSchema,
-            { temperature: 0.3 }
+            RewrittenBulletSchema
           );
           rewrittenBullets.push(rewritten);
         } catch (err) {
