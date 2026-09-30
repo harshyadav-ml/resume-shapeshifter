@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAppContext } from "@/lib/context";
 import ScoreCard from "@/components/ScoreCard";
@@ -11,11 +11,12 @@ import ReviewGate from "@/components/ReviewGate";
 import ErrorBanner from "@/components/ErrorBanner";
 import { ArrowLeft, Download } from "lucide-react";
 import Link from "next/link";
-import { pdf } from "@react-pdf/renderer";
-import TailoredResumePDF from "@/components/pdf/TailoredResumePDF";
-import ComparisonPDF from "@/components/pdf/ComparisonPDF";
-import { useState } from "react";
 
+// NOTE: @react-pdf/renderer uses browser-only APIs (canvas, Blob, etc.).
+// Do NOT import it at module level — it crashes during Next.js SSR even on
+// "use client" pages because Next.js evaluates the module on the server.
+// Both `pdf` and the PDF document components are dynamically imported inside
+// the click handlers so they are only ever evaluated in the browser.
 
 export default function ExportPage() {
   const { state } = useAppContext();
@@ -59,6 +60,11 @@ export default function ExportPage() {
   const handleExportTailored = async () => {
     try {
       setExportErrors([]);
+      // Lazily import both the renderer and the PDF component at click time only.
+      const [{ pdf }, { default: TailoredResumePDF }] = await Promise.all([
+        import("@react-pdf/renderer"),
+        import("@/components/pdf/TailoredResumePDF"),
+      ]);
       const blob = await pdf(<TailoredResumePDF run={tailoringRun} />).toBlob();
       const safeCompany = tailoringRun.jdProfile.company.replace(/[^a-zA-Z0-9]/g, "-");
       downloadBlob(blob, `Tailored_Resume_${safeCompany}.pdf`);
@@ -72,6 +78,11 @@ export default function ExportPage() {
   const handleExportComparison = async () => {
     try {
       setExportErrors([]);
+      // Same lazy-import pattern for the comparison PDF.
+      const [{ pdf }, { default: ComparisonPDF }] = await Promise.all([
+        import("@react-pdf/renderer"),
+        import("@/components/pdf/ComparisonPDF"),
+      ]);
       const blob = await pdf(<ComparisonPDF run={tailoringRun} />).toBlob();
       const safeCompany = tailoringRun.jdProfile.company.replace(/[^a-zA-Z0-9]/g, "-");
       downloadBlob(blob, `Comparison_Report_${safeCompany}.pdf`);
@@ -185,7 +196,7 @@ export default function ExportPage() {
           />
         </ReviewGate>
         <p className="text-xs text-muted-foreground mt-4">
-          💡 PDFs are generated locally in your browser. No data is sent to the server for PDF export.
+          PDFs are generated locally in your browser. No data is sent to the server for PDF export.
         </p>
       </section>
 
