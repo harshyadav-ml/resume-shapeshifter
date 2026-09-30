@@ -3,25 +3,13 @@
  * Each function calls the corresponding Next.js API route and returns typed data.
  *
  * Phase 4: Added Zod safeParse validation on every response.
+ * Refactor: Removed individual modular route wrappers (parse-resume, parse-jd,
+ * score, tailor, gaps) — the frontend exclusively calls /api/tailor-run.
  */
 
 import { z } from "zod";
-import type {
-  ResumeProfile,
-  JobDescriptionProfile,
-  MatchScore,
-  TailoredResume,
-  ResumeGap,
-  TailoringRun,
-} from "@/types";
-import {
-  ResumeProfileSchema,
-  JobDescriptionProfileSchema,
-  MatchScoreSchema,
-  TailoredResumeSchema,
-  ResumeGapSchema,
-  TailoringRunSchema,
-} from "@/lib/schemas";
+import type { TailoringRun } from "@/types";
+import { TailoringRunSchema } from "@/lib/schemas";
 
 // ── Error type ──────────────────────────────────────────────────────────────
 
@@ -70,57 +58,6 @@ async function fetchJson<T>(
   }
 
   return data as T;
-}
-
-// ── Individual API calls ────────────────────────────────────────────────────
-
-export async function parseResume(text: string): Promise<ResumeProfile> {
-  return fetchJson<ResumeProfile>(
-    "/api/parse-resume",
-    { text },
-    ResumeProfileSchema
-  );
-}
-
-export async function parseJD(text: string): Promise<JobDescriptionProfile> {
-  return fetchJson<JobDescriptionProfile>(
-    "/api/parse-jd",
-    { text },
-    JobDescriptionProfileSchema
-  );
-}
-
-export async function scoreMatch(
-  resume: ResumeProfile,
-  jd: JobDescriptionProfile
-): Promise<MatchScore> {
-  return fetchJson<MatchScore>(
-    "/api/score",
-    { resume, jd },
-    MatchScoreSchema
-  );
-}
-
-export async function tailorResume(
-  resume: ResumeProfile,
-  jd: JobDescriptionProfile
-): Promise<TailoredResume> {
-  return fetchJson<TailoredResume>(
-    "/api/tailor",
-    { resume, jd },
-    TailoredResumeSchema
-  );
-}
-
-export async function analyzeGaps(
-  resume: ResumeProfile,
-  jd: JobDescriptionProfile
-): Promise<ResumeGap[]> {
-  return fetchJson<ResumeGap[]>(
-    "/api/gaps",
-    { resume, jd },
-    z.array(ResumeGapSchema)
-  );
 }
 
 // ── Full pipeline ───────────────────────────────────────────────────────────
