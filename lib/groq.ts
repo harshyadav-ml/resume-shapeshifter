@@ -49,10 +49,14 @@ export async function callGroq<T>(
   opts: CallGroqOptions = {}
 ): Promise<T> {
   const {
-    model = "qwen/qwen3.8-27b",
+    // llama-3.1-8b-instant: Groq's fastest model (~300 tok/s).
+    // The full pipeline makes 6+ sequential Groq calls; a 27B model
+    // (qwen3.8-27b) easily exceeds Vercel's 10s free-tier limit.
+    // 8b-instant completes each call in ~1-2s, keeping the pipeline under 10s.
+    model = "llama-3.1-8b-instant",
     temperature = 0, // 0 = fully deterministic; same input always yields same output
-    maxRetries = 3,
-    maxTokens = 4096,
+    maxRetries = 2,  // 2 attempts is enough for a fast model; 3 adds too much dead time
+    maxTokens = 2048, // JSON schemas never need 4096 tokens; 2048 shaves response time
   } = opts;
 
   const client = getClient();
@@ -123,9 +127,10 @@ export async function callGroq<T>(
         );
       }
 
-      // Exponential backoff (skip for rate limits, already handled above)
+      // Short backoff — on a fast model (8b-instant) we want to retry quickly.
+      // 2^attempt * 500ms → 1s, 2s instead of the old 2s, 4s.
       if (attempt < maxRetries) {
-        const wait = Math.pow(2, attempt) * 1000; // 2s, 4s
+        const wait = Math.pow(2, attempt) * 500; // 1s, 2s
         console.log(`[Groq] Retrying in ${wait / 1000}s...`);
         await sleep(wait);
       }

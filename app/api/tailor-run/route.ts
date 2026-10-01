@@ -8,6 +8,10 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+// maxDuration=60: tells Vercel to allow up to 60s execution time.
+// On Hobby tier the hard cap is 10s regardless; on Pro/Enterprise this full
+// 60s is available. The real fix for the 10s limit is using a fast model
+// (llama-3.1-8b-instant in lib/groq.ts) so the pipeline completes in <10s.
 export const maxDuration = 60;
 import { db } from "@/lib/db";
 import { callGroq } from "@/lib/groq";
@@ -49,7 +53,9 @@ import type {
   TailoringRun,
 } from "@/types";
 
-const INTER_CALL_DELAY_MS = 50;
+// No inter-call delay needed — llama-3.1-8b-instant is well within Groq's
+// free-tier rate limits. Every ms saved matters on Vercel's 10s Hobby limit.
+const INTER_CALL_DELAY_MS = 0;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
