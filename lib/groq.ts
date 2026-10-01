@@ -49,15 +49,15 @@ export async function callGroq<T>(
   opts: CallGroqOptions = {}
 ): Promise<T> {
   const {
-    // llama-3.1-8b-instant: Groq's fastest model (~300 tok/s).
-    // The full pipeline makes 6+ sequential Groq calls; a 27B model
-    // (qwen3.8-27b) easily exceeds Vercel's 10s free-tier limit.
-    // 8b-instant completes each call in ~1-2s, keeping the pipeline under 10s.
-    model = "llama-3.1-8b-instant",
+    // openai/gpt-oss-20b: confirmed active on this Groq API key.
+    // Smaller and faster than qwen/qwen3.8-27b (20B vs 27B params).
+    // llama-3.1-8b-instant is NOT available on the free Groq tier.
+    model = "openai/gpt-oss-20b",
     temperature = 0, // 0 = fully deterministic; same input always yields same output
     maxRetries = 2,  // 2 attempts is enough for a fast model; 3 adds too much dead time
     maxTokens = 2048, // JSON schemas never need 4096 tokens; 2048 shaves response time
   } = opts;
+
 
   const client = getClient();
   let lastError: Error | null = null;
