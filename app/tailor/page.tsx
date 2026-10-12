@@ -40,8 +40,6 @@ export default function TailorPage() {
     );
   }
 
-
-
   // Error state
   if (state.status === "error" && state.errors.length > 0) {
     return (

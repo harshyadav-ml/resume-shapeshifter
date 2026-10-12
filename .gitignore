@@ -50,3 +50,6 @@ skills-lock.json
 dev.db
 dev.db-journal
 repo_snapshot.txt
+
+# Browser "Save Page As" artifact — not source code
+Resume\ Shapeshifter*_files/
