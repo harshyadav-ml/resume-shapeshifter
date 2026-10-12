@@ -29,12 +29,12 @@ import type {
 // ── Throttle delays ─────────────────────────────────────────────────────────
 // 2.5 s between pipeline step transitions (Steps 1→2→3 etc.)
 const STEP_DELAY_MS = 2500;
-// 4 s between individual bullet rewrites — stays under Groq's TPM window
-// on Hobby-tier keys even with long resumes (12–15 bullets).
-const BULLET_DELAY_MS = 4000;
-// After every N bullets, pause an extra 8 s to let the TPM bucket refill.
-const BULLET_BATCH_SIZE = 3;
-const BULLET_BATCH_PAUSE_MS = 8000;
+// 3.5 s between every individual bullet rewrite — flat, predictable delay
+// that keeps token throughput well under Groq's TPM limit for Hobby keys.
+const BULLET_DELAY_MS = 3500;
+// If a 429 escapes callStep's internal retries, wait this long before the
+// one final re-attempt at the bullet level.
+const BULLET_RATE_LIMIT_RETRY_MS = 10_000;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -169,6 +169,43 @@ function mergeSkills(
   return [...jdMatched, ...remaining];
 }
 
+// ── Bullet-level 429 retry wrapper ──────────────────────────────────────────
+// callStep already retries 429s using the Retry-After header (up to 3×).
+// This wrapper is the outermost safety net: if a 429 still escapes, we wait
+// BULLET_RATE_LIMIT_RETRY_MS and make exactly one more attempt before giving up.
+async function rewriteBullet(
+  bullet: string,
+  company: string,
+  title: string,
+  jdProfile: Record<string, unknown>
+): Promise<RewrittenBullet> {
+  try {
+    const { rewrittenBullet } = await callStep<{ rewrittenBullet: RewrittenBullet }>("4", {
+      bullet,
+      company,
+      title,
+      jdProfile,
+    });
+    return rewrittenBullet;
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 429) {
+      console.warn(
+        `[api] Bullet 429 escaped callStep retries — waiting ${BULLET_RATE_LIMIT_RETRY_MS / 1000}s then retrying once more…`
+      );
+      await sleep(BULLET_RATE_LIMIT_RETRY_MS);
+      // Final attempt — let any error propagate naturally to the outer catch.
+      const { rewrittenBullet } = await callStep<{ rewrittenBullet: RewrittenBullet }>("4", {
+        bullet,
+        company,
+        title,
+        jdProfile,
+      });
+      return rewrittenBullet;
+    }
+    throw err; // non-429 errors propagate immediately
+  }
+}
+
 // ── Full pipeline orchestrator ───────────────────────────────────────────────
 
 export async function runTailoringPipeline(
@@ -246,14 +283,11 @@ export async function runTailoringPipeline(
             throw new Error(`Bullet at [${ei}][${bi}] is not a string: ${JSON.stringify(bullet)}`);
           }
 
-          const { rewrittenBullet } = await callStep<{ rewrittenBullet: RewrittenBullet }>(
-            "4",
-            {
-              bullet,
-              company: exp.company,
-              title: exp.title,
-              jdProfile: safeJdProfile,
-            }
+          const rewrittenBullet = await rewriteBullet(
+            bullet,
+            exp.company,
+            exp.title,
+            safeJdProfile as unknown as Record<string, unknown>
           );
           tailoredExperience[ei].bullets[bi] = rewrittenBullet;
           console.log(`[api] Bullet ${bulletCount}/${totalBullets} ✓`);
@@ -263,22 +297,13 @@ export async function runTailoringPipeline(
           errors.push(`Failed to rewrite bullet ${bulletCount} ("${bullet.slice(0, 50)}..."): ${errMsg}`);
         }
 
+        // Flat 3.5 s delay after every bullet (skip after the last one).
         const isLastBullet =
           ei === safeResumeProfile.experience.length - 1 &&
           bi === exp.bullets.length - 1;
-
         if (!isLastBullet) {
-          // Every BULLET_BATCH_SIZE bullets, take an extended pause so the
-          // Groq TPM bucket can partially refill before the next batch.
-          if (bulletCount % BULLET_BATCH_SIZE === 0) {
-            console.log(
-              `[api] Batch pause after bullet ${bulletCount} — waiting ${BULLET_BATCH_PAUSE_MS}ms…`
-            );
-            await sleep(BULLET_BATCH_PAUSE_MS);
-          } else {
-            console.log(`[api] Waiting ${BULLET_DELAY_MS}ms before next bullet…`);
-            await sleep(BULLET_DELAY_MS);
-          }
+          console.log(`[api] Waiting ${BULLET_DELAY_MS}ms before next bullet…`);
+          await sleep(BULLET_DELAY_MS);
         }
       }
     }
