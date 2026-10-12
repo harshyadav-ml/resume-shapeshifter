@@ -6,7 +6,6 @@ import { useAppContext } from "@/lib/context";
 import ScoreCard from "@/components/ScoreCard";
 import GapAnalysis from "@/components/GapAnalysis";
 import PDFExportButton from "@/components/PDFExportButton";
-import DisclaimerBanner from "@/components/DisclaimerBanner";
 import ReviewGate from "@/components/ReviewGate";
 import ErrorBanner from "@/components/ErrorBanner";
 import { ArrowLeft, Download } from "lucide-react";
@@ -200,8 +199,7 @@ export default function ExportPage() {
         </p>
       </section>
 
-      {/* Disclaimer */}
-      <DisclaimerBanner className="mb-8" />
+
 
       {/* Back nav */}
       <div className="pt-4 border-t border-border/50">

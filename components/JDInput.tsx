@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Clipboard, Link, Sparkles } from "lucide-react";
+import { Clipboard, Link } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -42,8 +42,7 @@ export default function JDInput({ value, onChange, className }: JDInputProps) {
 
   return (
     <div className={cn("space-y-3", className)}>
-      <div className="flex items-center gap-2 text-sm font-semibold">
-        <Sparkles className="h-4 w-4 text-accent" />
+      <div className="text-sm font-semibold">
         Job Description
       </div>
 

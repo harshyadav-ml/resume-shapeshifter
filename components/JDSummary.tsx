@@ -13,7 +13,7 @@ const SENIORITY_LABELS: Record<string, { label: string; color: string }> = {
   intern: { label: "Intern", color: "bg-sky-500/10 text-sky-600 border-sky-500/30" },
   junior: { label: "Junior", color: "bg-blue-500/10 text-blue-600 border-blue-500/30" },
   mid: { label: "Mid-level", color: "bg-violet-500/10 text-violet-600 border-violet-500/30" },
-  senior: { label: "Senior", color: "bg-amber-500/10 text-amber-600 border-amber-500/30" },
+  senior: { label: "Senior", color: "bg-indigo-500/10 text-indigo-400 border-indigo-500/30" },
   lead: { label: "Lead", color: "bg-orange-500/10 text-orange-600 border-orange-500/30" },
   principal: { label: "Principal", color: "bg-red-500/10 text-red-600 border-red-500/30" },
 };

@@ -19,7 +19,7 @@ const CONFIDENCE_STYLES: Record<ConfidenceLevel, { label: string; className: str
   medium: {
     label: "Med",
     className:
-      "bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30",
+      "bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/30",
   },
   low: {
     label: "Low",
@@ -53,12 +53,12 @@ export default function ConfidenceBadge({
           aria-label={`Risk: ${riskFlag}`}
         >
           <AlertTriangle
-            className="h-4 w-4 text-amber-500 cursor-help"
+            className="h-4 w-4 text-blue-400 cursor-help"
             strokeWidth={2.5}
           />
           {/* Tooltip */}
           <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block z-50 w-56">
-            <div className="bg-zinc-900 dark:bg-zinc-800 text-zinc-100 text-xs rounded-lg px-3 py-2 shadow-xl border border-amber-500/30 leading-relaxed">
+            <div className="bg-zinc-900 dark:bg-zinc-800 text-zinc-100 text-xs rounded-lg px-3 py-2 shadow-xl border border-blue-500/30 leading-relaxed">
               ⚠️ {riskFlag}
               <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-zinc-900 dark:border-t-zinc-800" />
             </div>

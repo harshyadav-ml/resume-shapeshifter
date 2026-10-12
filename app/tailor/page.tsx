@@ -139,12 +139,12 @@ export default function TailorPage() {
       {/* Risk summary banner */}
       {riskBullets.length > 0 && (
         <div
-          className="flex items-start gap-3 rounded-xl border border-amber-400/40 bg-amber-500/10 px-4 py-3.5 mb-6"
+          className="flex items-start gap-3 rounded-xl border border-blue-500/30 bg-blue-500/10 px-4 py-3.5 mb-6"
           role="alert"
         >
-          <AlertTriangle className="h-5 w-5 text-amber-500 mt-0.5 shrink-0" />
+          <AlertTriangle className="h-5 w-5 text-blue-400 mt-0.5 shrink-0" />
           <div>
-            <p className="text-sm font-semibold text-amber-700 dark:text-amber-400">
+            <p className="text-sm font-semibold text-blue-600 dark:text-blue-400">
               {riskBullets.length} bullet{riskBullets.length > 1 ? "s" : ""} have risk
               flags — please review before exporting.
             </p>
@@ -155,7 +155,7 @@ export default function TailorPage() {
                 </span>
               )}
               {medConfidence > 0 && (
-                <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">
+                <span className="text-xs text-blue-600 dark:text-blue-400 font-medium">
                   {medConfidence} medium
                 </span>
               )}
@@ -189,7 +189,7 @@ export default function TailorPage() {
                   ? "bg-emerald-500"
                   : reviewProgress > 50
                   ? "bg-primary"
-                  : "bg-amber-500"
+                  : "bg-blue-500"
               )}
               style={{ width: `${reviewProgress}%` }}
             />

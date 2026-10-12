@@ -4,12 +4,11 @@ import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import ResumeInput from "@/components/ResumeInput";
 import JDInput from "@/components/JDInput";
-import DisclaimerBanner from "@/components/DisclaimerBanner";
 import { useAppContext } from "@/lib/context";
 import { mockTailoringRun, mockResume, mockJD } from "@/lib/mock-data";
 import { runTailoringPipeline, ApiError } from "@/lib/api";
 import ErrorBanner from "@/components/ErrorBanner";
-import { ArrowRight, Loader2, Sparkles, FlaskConical, CheckCircle2 } from "lucide-react";
+import { ArrowRight, Loader2, FlaskConical, CheckCircle2 } from "lucide-react";
 
 function InputPageInner() {
   const { state, dispatch } = useAppContext();
@@ -132,7 +131,6 @@ function InputPageInner() {
       <div className="mb-8">
         {/* Step indicator */}
         <div className="flex items-center gap-2 text-sm text-zinc-500 font-mono mb-3">
-          <Sparkles className="h-4 w-4" />
           Step 1 of 4 — Input
         </div>
 
@@ -239,10 +237,7 @@ function InputPageInner() {
         />
       )}
 
-      {/* ── Disclaimer ────────────────────────────────────────────── */}
-      <div className="mt-8">
-        <DisclaimerBanner />
-      </div>
+
     </main>
   );
 }

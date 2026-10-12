@@ -37,7 +37,7 @@ export default function BulletCard({
         isUnchanged
           ? "border-white/[0.05] opacity-50"
           : hasRisk
-          ? "border-amber-500/20 bullet-card-risk"
+          ? "border-blue-500/30 bullet-card-risk"
           : "border-white/[0.08] bullet-card-changed",
         /* Hover lift */
         !isUnchanged && "hover:border-white/[0.14] hover:-translate-y-px",
@@ -49,7 +49,7 @@ export default function BulletCard({
         <div className={cn(
           "absolute inset-x-0 top-0 h-px",
           hasRisk
-            ? "bg-gradient-to-r from-transparent via-amber-500/30 to-transparent"
+            ? "bg-gradient-to-r from-transparent via-blue-500/30 to-transparent"
             : "bg-gradient-to-r from-transparent via-white/10 to-transparent"
         )} />
       )}
@@ -62,7 +62,7 @@ export default function BulletCard({
             <span className={cn(
               "text-[10px] font-mono font-semibold tracking-widest uppercase px-2 py-0.5 rounded-full border",
               hasRisk
-                ? "text-amber-300/70 border-amber-500/20 bg-amber-500/[0.04]"
+                ? "text-blue-400 border-blue-500/25 bg-blue-500/[0.05]"
                 : "text-zinc-400 border-white/10 bg-white/[0.03]"
             )}>
               {hasRisk ? "⚠ Modified" : "◦ Modified"}
@@ -102,11 +102,11 @@ export default function BulletCard({
               <div className="flex items-center gap-1.5">
                 <div className={cn(
                   "h-1.5 w-1.5 rounded-full",
-                  hasRisk ? "bg-amber-400" : "bg-zinc-300"
+                  hasRisk ? "bg-blue-400" : "bg-zinc-300"
                 )} />
                 <span className={cn(
                   "text-[10px] font-mono font-semibold tracking-widest uppercase",
-                  hasRisk ? "text-amber-300/70" : "text-zinc-400"
+                  hasRisk ? "text-blue-400" : "text-zinc-400"
                 )}>
                   After
                 </span>
@@ -114,7 +114,7 @@ export default function BulletCard({
               <div className={cn(
                 "p-3 rounded-xl border",
                 hasRisk
-                  ? "bg-amber-500/[0.04] border-amber-500/15"
+                  ? "bg-blue-500/[0.04] border-blue-500/20"
                   : "bg-white/[0.03] border-white/[0.08]"
               )}>
                 <p className="text-[13px] leading-relaxed font-medium text-zinc-100">
@@ -134,7 +134,7 @@ export default function BulletCard({
                 className={cn(
                   "chip",
                   hasRisk
-                    ? "text-amber-300/70 border border-amber-500/20"
+                    ? "text-blue-400 border border-blue-500/25"
                     : "text-zinc-400 border border-white/10"
                 )}
               >
@@ -144,12 +144,12 @@ export default function BulletCard({
           </div>
         )}
 
-        {/* ── Risk warning — ultra-subtle glass amber ─────────────── */}
+        {/* ── Risk warning — sleek blue accent ─────────────── */}
         {hasRisk && (
-          <div className="flex items-start gap-2.5 rounded-xl bg-amber-500/[0.04] border border-amber-500/20 px-3.5 py-3">
-            <AlertTriangle className="h-4 w-4 text-amber-400/70 shrink-0 mt-0.5" />
-            <p className="text-xs text-amber-200/70 leading-relaxed">
-              <span className="font-semibold text-amber-300">Verify: </span>
+          <div className="flex items-start gap-2.5 rounded-xl bg-blue-500/[0.04] border border-blue-500/25 px-3.5 py-3">
+            <AlertTriangle className="h-4 w-4 text-blue-400 shrink-0 mt-0.5" />
+            <p className="text-xs text-blue-200/80 leading-relaxed">
+              <span className="font-semibold text-blue-400">Verify: </span>
               {bullet.riskFlag}
             </p>
           </div>

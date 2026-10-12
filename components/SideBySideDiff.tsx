@@ -52,7 +52,7 @@ export default function SideBySideDiff({ experience, className }: SideBySideDiff
           {totalChanged} bullets changed
         </span>
         {totalRisks > 0 && (
-          <span className="chip text-[11px] bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+          <span className="chip text-[11px] bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/30">
             ⚠️ {totalRisks} risk flag{totalRisks > 1 ? "s" : ""}
           </span>
         )}

@@ -39,8 +39,8 @@ const FEATURES = [
     title: "Export",
     description:
       "Download a clean ATS-friendly resume PDF or a full side-by-side comparison proof artifact. You accept or revert every change first.",
-    accent: "text-amber-300",
-    iconBg: "bg-amber-500/8 border-amber-500/20",
+    accent: "text-blue-400",
+    iconBg: "bg-blue-500/8 border-blue-500/20",
   },
 ];
 
@@ -59,7 +59,7 @@ const PRINCIPLES = [
   {
     icon: Zap,
     text: "Risk-flagged bullets require your explicit review",
-    color: "text-amber-300",
+    color: "text-blue-400",
   },
   {
     icon: TrendingUp,
@@ -174,11 +174,11 @@ function TiltedPaperMockup() {
         </div>
         {/* Section label */}
         <div className="h-1.5 w-20 bg-zinc-400 rounded mb-3" />
-        {/* Lines — with yellow highlight on "tailored" bullet */}
+        {/* Lines — with blue highlight on "tailored" bullet */}
         <div className="space-y-2 mb-5">
           <div className="h-2 w-full bg-zinc-300 rounded" />
           <div className="relative">
-            <div className="h-5 w-5/6 rounded flex items-center px-1 bg-yellow-200/50">
+            <div className="h-5 w-5/6 rounded flex items-center px-1 bg-blue-400/25">
               <div className="h-1.5 w-4/5 bg-zinc-600 rounded" />
             </div>
           </div>
@@ -189,7 +189,7 @@ function TiltedPaperMockup() {
         <div className="space-y-2">
           <div className="h-2 w-full bg-zinc-300 rounded" />
           <div className="relative">
-            <div className="h-5 w-3/4 rounded flex items-center px-1 bg-yellow-200/50">
+            <div className="h-5 w-3/4 rounded flex items-center px-1 bg-blue-400/25">
               <div className="h-1.5 w-2/3 bg-zinc-600 rounded" />
             </div>
           </div>
@@ -406,7 +406,6 @@ export default function HomePage() {
         <div className="separator-gradient" />
         <div className="max-w-5xl mx-auto px-6 py-8 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2.5">
-            <Zap className="h-4 w-4 text-zinc-500" />
             <span className="font-display font-bold text-sm tracking-tight text-zinc-300">Resume Shapeshifter</span>
             <span className="text-zinc-700 text-xs">· AI-powered resume tailoring</span>
           </div>

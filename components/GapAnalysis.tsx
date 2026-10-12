@@ -25,15 +25,15 @@ const IMPORTANCE_CONFIG: Record<
   medium: {
     label: "Medium",
     badgeClass:
-      "bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30",
-    icon: <AlertCircle className="h-4 w-4 text-amber-500" />,
+      "bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/30",
+    icon: <AlertCircle className="h-4 w-4 text-blue-500" />,
     order: 1,
   },
   low: {
     label: "Low",
     badgeClass:
-      "bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/30",
-    icon: <AlertCircle className="h-4 w-4 text-blue-400" />,
+      "bg-zinc-500/15 text-zinc-600 dark:text-zinc-400 border border-zinc-500/30",
+    icon: <AlertCircle className="h-4 w-4 text-zinc-400" />,
     order: 2,
   },
 };
@@ -49,7 +49,7 @@ function GapItem({ gap, index }: { gap: ResumeGap; index: number }) {
         gap.importance === "high"
           ? "border-red-400/30"
           : gap.importance === "medium"
-          ? "border-amber-400/30"
+          ? "border-blue-500/30"
           : "border-border/60"
       )}
       id={`gap-${index}`}
@@ -172,7 +172,7 @@ export default function GapAnalysis({
           </span>
         )}
         {medCount > 0 && (
-          <span className="chip text-[11px] bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/25">
+          <span className="chip text-[11px] bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/25">
             {medCount} Medium
           </span>
         )}

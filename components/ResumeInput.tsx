@@ -92,7 +92,7 @@ Or drag & drop a .txt, .pdf, or .docx file above."
             <div
               className={cn(
                 "h-full rounded-full transition-all duration-300",
-                charPercent > 90 ? "bg-amber-500" : "bg-primary/60"
+                charPercent > 90 ? "bg-blue-500" : "bg-primary/60"
               )}
               style={{ width: `${charPercent}%` }}
             />

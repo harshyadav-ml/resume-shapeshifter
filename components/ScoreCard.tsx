@@ -26,10 +26,10 @@ function scoreColor(s: number): { stroke: string; text: string; bg: string; glow
     glow:   "shadow-glow-emerald",
   };
   if (s >= 60) return {
-    stroke: "#f59e0b",
-    text:   "text-amber-400",
-    bg:     "bg-amber-500/10",
-    glow:   "shadow-glow-amber",
+    stroke: "#3b82f6",
+    text:   "text-blue-400",
+    bg:     "bg-blue-500/10",
+    glow:   "shadow-glow-blue",
   };
   return {
     stroke: "#ef4444",

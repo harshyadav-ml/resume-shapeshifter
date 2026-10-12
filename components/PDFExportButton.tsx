@@ -72,7 +72,7 @@ export default function PDFExportButton({
         onClick={handleComparison}
         className={cn(
           "flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-semibold text-sm transition-all",
-          "bg-accent text-accent-foreground hover:bg-accent/90 shadow-md shadow-accent/20",
+          "bg-blue-600 text-white hover:bg-blue-500 shadow-md shadow-blue-500/20 active:translate-y-0",
           "disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
         )}
         aria-label="Export side-by-side comparison PDF"

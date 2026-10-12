@@ -71,7 +71,7 @@ export default function ReviewGate({
           "rounded-2xl border p-5 transition-all duration-300",
           canExport
             ? "border-emerald-500/30 bg-emerald-500/5"
-            : "border-amber-400/40 bg-amber-500/5"
+            : "border-blue-500/30 bg-blue-500/5"
         )}
       >
         {/* Header */}
@@ -79,7 +79,7 @@ export default function ReviewGate({
           {canExport ? (
             <CheckCircle2 className="h-5 w-5 text-emerald-500 mt-0.5 shrink-0" />
           ) : (
-            <ShieldAlert className="h-5 w-5 text-amber-500 mt-0.5 shrink-0" />
+            <ShieldAlert className="h-5 w-5 text-blue-400 mt-0.5 shrink-0" />
           )}
           <div>
             <p
@@ -87,7 +87,7 @@ export default function ReviewGate({
                 "text-sm font-semibold",
                 canExport
                   ? "text-emerald-700 dark:text-emerald-400"
-                  : "text-amber-700 dark:text-amber-400"
+                  : "text-blue-600 dark:text-blue-400"
               )}
             >
               {canExport

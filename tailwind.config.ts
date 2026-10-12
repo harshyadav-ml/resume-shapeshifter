@@ -93,6 +93,7 @@ const config: Config = {
         /* Glow effects */
         "glow-primary": "0 0 24px hsl(226 100% 66% / 0.2), 0 0 8px hsl(226 100% 66% / 0.12)",
         "glow-emerald": "0 0 24px hsl(155 80% 52% / 0.2), 0 0 8px hsl(155 80% 52% / 0.12)",
+        "glow-blue":    "0 0 24px hsl(217 91% 60% / 0.25), 0 0 8px hsl(217 91% 60% / 0.15)",
         "glow-amber":   "0 0 24px hsl(38 100% 62% / 0.2), 0 0 8px hsl(38 100% 62% / 0.12)",
         "glow-sm-primary": "0 0 12px hsl(226 100% 66% / 0.15)",
         /* Inner highlight */

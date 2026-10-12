@@ -33,9 +33,9 @@ html { color-scheme: dark; }
   --muted:            240 4% 10%;
   --muted-foreground: 0 0% 46%;         /* zinc-500 */
 
-  /* ── Accent — restrained amber (ultra-subtle only) ────────── */
-  --accent:           38 60% 55%;
-  --accent-foreground: 38 80% 8%;
+  /* ── Accent — sleek blue ───────────────────────────────────── */
+  --accent:           217 91% 60%;
+  --accent-foreground: 0 0% 100%;
 
   /* ── Destructive ──────────────────────────────────────────── */
   --destructive:      0 72% 52%;
@@ -51,6 +51,7 @@ html { color-scheme: dark; }
 
   /* ── Emerald (accent only — for status dots, gains) ───────── */
   --glow-emerald: 155 70% 45%;
+  --glow-blue:    217 91% 60%;
   --glow-amber:   38 80% 55%;
 }
 
@@ -150,8 +151,8 @@ body {
   background: hsl(0 0% 100% / 0.02);
 }
 .bullet-card-risk {
-  border-left: 2px solid hsl(38 80% 55% / 0.4);
-  background: hsl(38 80% 55% / 0.02);
+  border-left: 2px solid hsl(217 91% 60% / 0.5);
+  background: hsl(217 91% 60% / 0.02);
 }
 
 /* ============================================================

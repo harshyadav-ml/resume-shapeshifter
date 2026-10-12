@@ -3,7 +3,6 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { AppProvider } from "@/lib/context";
 import Link from "next/link";
-import { Zap } from "lucide-react";
 
 /* ── Fonts ──────────────────────────────────────────────────────
    Inter      → body / UI copy (font-sans)
@@ -53,12 +52,9 @@ export default function RootLayout({
               {/* Wordmark */}
               <Link
                 href="/"
-                className="flex items-center gap-2.5 hover:opacity-80 transition-opacity"
+                className="flex items-center hover:opacity-80 transition-opacity"
                 aria-label="Resume Shapeshifter Home"
               >
-                <div className="h-7 w-7 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center">
-                  <Zap className="h-4 w-4 text-zinc-300" />
-                </div>
                 <span className="font-display font-bold text-sm tracking-tight text-white">
                   Resume Shapeshifter
                 </span>

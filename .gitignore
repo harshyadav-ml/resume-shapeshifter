@@ -49,3 +49,4 @@ skills-lock.json
 .env
 dev.db
 dev.db-journal
+repo_snapshot.txt
