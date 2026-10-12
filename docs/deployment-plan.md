@@ -1,6 +1,6 @@
 # Resume Shapeshifter — Deployment Plan
 
-> **Version:** 1.0 | **Date:** September 2026 | **Author:** Auto-generated  
+> **Version:** 1.0 | **Date:** September 2026 | **Author:** Harsh   
 > **Status:** Draft — Pending Review
 
 ---

@@ -7,7 +7,7 @@ import JDInput from "@/components/JDInput";
 import DisclaimerBanner from "@/components/DisclaimerBanner";
 import { useAppContext } from "@/lib/context";
 import { mockTailoringRun, mockResume, mockJD } from "@/lib/mock-data";
-import { runTailoringPipeline } from "@/lib/api";
+import { runTailoringPipeline, ApiError } from "@/lib/api";
 import ErrorBanner from "@/components/ErrorBanner";
 import { ArrowRight, Loader2, Sparkles, FlaskConical, CheckCircle2 } from "lucide-react";
 
@@ -87,8 +87,15 @@ function InputPageInner() {
 
     // Real Groq API pipeline
     try {
-      setPipelineStatus("Parsing resume & JD, scoring, tailoring bullets…");
-      const result = await runTailoringPipeline(state.resumeRaw, state.jdRaw);
+      setPipelineStatus("Connecting to pipeline…");
+      const result = await runTailoringPipeline(
+        state.resumeRaw,
+        state.jdRaw,
+        (progress) => {
+          // Show live step feedback from the NDJSON stream
+          setPipelineStatus(`${progress.message} [${progress.step}]`);
+        }
+      );
 
       if (result.status === "error") {
         throw new Error(result.errors?.join("; ") || "Pipeline failed");
@@ -100,7 +107,16 @@ function InputPageInner() {
       router.push("/analyze");
     } catch (err) {
       console.error("[input] Pipeline error:", err);
-      const message = err instanceof Error ? err.message : "Analysis failed";
+      // ApiError already has a clean human-readable message.
+      // For unexpected errors, fall back gracefully.
+      let message: string;
+      if (err instanceof ApiError) {
+        message = err.message;
+      } else if (err instanceof Error) {
+        message = err.message;
+      } else {
+        message = "Analysis failed. Please try again.";
+      }
       dispatch({ type: "SET_ERRORS", payload: [message] });
       setIsAnalyzing(false);
       setPipelineStatus("");

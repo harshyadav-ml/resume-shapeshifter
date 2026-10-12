@@ -1,19 +1,25 @@
 /**
- * POST /api/tailor-run
+ * POST /api/tailor-run?step=N
  *
- * Full orchestrator — runs the complete tailoring pipeline:
- *   parse resume → parse JD → score (original) → tailor → gaps → score (tailored)
+ * Stateless, single-step API. Each call runs exactly ONE Groq prompt and
+ * immediately returns standard JSON. All orchestration, throttling, and
+ * state management is handled by the frontend in lib/api.ts.
  *
- * Returns a complete TailoringRun object.
+ * Steps:
+ *   ?step=1  parse-resume    { resumeText }               → { resumeProfile }
+ *   ?step=2  parse-jd        { jdText }                   → { jdProfile }
+ *   ?step=3  score-original  { resumeProfile, jdProfile } → { originalScore }
+ *   ?step=4  rewrite-bullet  { bullet, company, title, jdProfile } → { rewrittenBullet }
+ *   ?step=5  gap-analysis    { resumeProfile, jdProfile } → { gaps }
+ *   ?step=6  score-tailored  { resumeProfile, jdProfile } → { tailoredScore }
+ *
+ * NO streaming. NO runtime = 'edge'. NO sleep(). Each request completes
+ * in under 15 seconds, safely within Vercel Hobby's 60-second limit.
  */
 
 import { NextRequest, NextResponse } from "next/server";
-// maxDuration=60: tells Vercel to allow up to 60s execution time.
-// On Hobby tier the hard cap is 10s regardless; on Pro/Enterprise this full
-// 60s is available. The real fix for the 10s limit is using a fast model
-// (llama-3.1-8b-instant in lib/groq.ts) so the pipeline completes in <10s.
 export const maxDuration = 60;
-import { db } from "@/lib/db";
+
 import { callGroq } from "@/lib/groq";
 import {
   ResumeProfileSchema,
@@ -42,237 +48,171 @@ import {
   GAP_ANALYSIS_SYSTEM_PROMPT,
   buildGapAnalysisUserPrompt,
 } from "@/lib/prompts/gap-analysis";
-import type {
-  ResumeProfile,
-  JobDescriptionProfile,
-  MatchScore,
-  TailoredResume,
-  TailoredExperienceEntry,
-  RewrittenBullet,
-  ResumeGap,
-  TailoringRun,
-} from "@/types";
 
-// No inter-call delay needed — llama-3.1-8b-instant is well within Groq's
-// free-tier rate limits. Every ms saved matters on Vercel's 10s Hobby limit.
-const INTER_CALL_DELAY_MS = 0;
+// ── Helpers ──────────────────────────────────────────────────────────────────
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+function badRequest(message: string) {
+  return NextResponse.json({ error: message }, { status: 400 });
 }
+
+function ok(data: Record<string, unknown>) {
+  return NextResponse.json(data, { status: 200 });
+}
+
+// ── Handler ──────────────────────────────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
-  const errors: string[] = [];
-  let status: "success" | "partial" | "error" = "success";
+  const { searchParams } = new URL(request.url);
+  const step = searchParams.get("step");
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let body: Record<string, any>;
+  try {
+    body = await request.json();
+  } catch {
+    return badRequest("Invalid JSON body");
+  }
 
   try {
-    const body = await request.json();
-    const { resumeText, jdText } = body;
-
-    if (
-      !resumeText ||
-      !jdText ||
-      typeof resumeText !== "string" ||
-      typeof jdText !== "string"
-    ) {
-      return NextResponse.json(
-        { error: "Both resumeText and jdText are required" },
-        { status: 422 }
-      );
-    }
-
-    console.log("[tailor-run] Starting pipeline...");
-
-    // ── Step 1: Parse resume ────────────────────────────────────────────
-    console.log("[tailor-run] Step 1: Parsing resume...");
-    const resumeProfile = await callGroq<ResumeProfile>(
-      RESUME_PARSER_SYSTEM_PROMPT,
-      buildResumeParserUserPrompt(resumeText),
-      ResumeProfileSchema
-    );
-
-    // ── Step 2: Parse JD ────────────────────────────────────────────────
-    console.log("[tailor-run] Step 2: Parsing JD...");
-    const jdProfile = await callGroq<JobDescriptionProfile>(
-      JD_EXTRACTION_SYSTEM_PROMPT,
-      buildJDExtractionUserPrompt(jdText),
-      JobDescriptionProfileSchema
-    );
-
-    // ── Step 3: Score (original) ────────────────────────────────────────
-    console.log("[tailor-run] Step 3: Scoring original resume...");
-    const originalScore = await callGroq<MatchScore>(
-      MATCH_SCORING_SYSTEM_PROMPT,
-      buildMatchScoringUserPrompt(
-        resumeProfile as unknown as Record<string, unknown>,
-        jdProfile as unknown as Record<string, unknown>
-      ),
-      MatchScoreSchema
-    );
-
-    // ── Step 4: Tailor bullets ──────────────────────────────────────────
-    console.log("[tailor-run] Step 4: Tailoring bullets...");
-    const tailoredExperience: TailoredExperienceEntry[] = [];
-
-    for (const exp of resumeProfile.experience) {
-      const rewrittenBullets: RewrittenBullet[] = [];
-
-      for (const bullet of exp.bullets) {
-        try {
-          const rewritten = await callGroq<RewrittenBullet>(
-            BULLET_REWRITER_SYSTEM_PROMPT,
-            buildBulletRewriterUserPrompt(
-              bullet,
-              exp.company,
-              exp.title,
-              jdProfile as unknown as Record<string, unknown>
-            ),
-            RewrittenBulletSchema
-          );
-          rewrittenBullets.push(rewritten);
-        } catch (err) {
-          console.error(
-            `[tailor-run] Bullet failed: "${bullet.slice(0, 40)}..."`,
-            err
-          );
-          errors.push(`Failed to rewrite bullet: "${bullet.slice(0, 60)}..."`);
-          rewrittenBullets.push({
-            original: bullet,
-            tailored: bullet,
-            changeReason: "Rewrite failed — using original",
-            keywordsAddressed: [],
-            confidence: "low" as const,
-            riskFlag: "Rewrite failed. Verify manually.",
-          });
+    switch (step) {
+      // ── Step 1: Parse resume ──────────────────────────────────────────────
+      case "1": {
+        const { resumeText } = body;
+        if (!resumeText || typeof resumeText !== "string") {
+          return badRequest("resumeText (string) is required");
         }
-        await sleep(INTER_CALL_DELAY_MS);
+        console.log("[tailor-run] Step 1: Parsing resume...");
+        const resumeProfile = await callGroq(
+          RESUME_PARSER_SYSTEM_PROMPT,
+          buildResumeParserUserPrompt(resumeText),
+          ResumeProfileSchema
+        );
+        console.log("[tailor-run] Step 1 complete");
+        return ok({ resumeProfile });
       }
 
-      tailoredExperience.push({
-        company: exp.company,
-        title: exp.title,
-        bullets: rewrittenBullets,
-      });
+      // ── Step 2: Parse JD ──────────────────────────────────────────────────
+      case "2": {
+        const { jdText } = body;
+        if (!jdText || typeof jdText !== "string") {
+          return badRequest("jdText (string) is required");
+        }
+        console.log("[tailor-run] Step 2: Parsing JD...");
+        const jdProfile = await callGroq(
+          JD_EXTRACTION_SYSTEM_PROMPT,
+          buildJDExtractionUserPrompt(jdText),
+          JobDescriptionProfileSchema
+        );
+        console.log("[tailor-run] Step 2 complete");
+        return ok({ jdProfile });
+      }
+
+      // ── Step 3: Score original ────────────────────────────────────────────
+      case "3": {
+        const { resumeProfile, jdProfile } = body;
+        if (!resumeProfile || !jdProfile) {
+          return badRequest("resumeProfile and jdProfile are required");
+        }
+        console.log("[tailor-run] Step 3: Scoring original resume...");
+        const originalScore = await callGroq(
+          MATCH_SCORING_SYSTEM_PROMPT,
+          buildMatchScoringUserPrompt(
+            resumeProfile as Record<string, unknown>,
+            jdProfile as Record<string, unknown>
+          ),
+          MatchScoreSchema
+        );
+        console.log("[tailor-run] Step 3 complete");
+        return ok({ originalScore });
+      }
+
+      // ── Step 4: Rewrite a single bullet ──────────────────────────────────
+      // The client calls this once per bullet, waiting 2.5s between each call.
+      case "4": {
+        const { bullet, company, title, jdProfile } = body;
+        if (
+          !bullet || typeof bullet !== "string" ||
+          !company || typeof company !== "string" ||
+          !title || typeof title !== "string" ||
+          !jdProfile
+        ) {
+          return badRequest(
+            "bullet (string), company (string), title (string), and jdProfile are required"
+          );
+        }
+        console.log(
+          `[tailor-run] Step 4: Rewriting bullet for ${company} — "${(bullet as string).slice(0, 40)}..."`
+        );
+        const rewrittenBullet = await callGroq(
+          BULLET_REWRITER_SYSTEM_PROMPT,
+          buildBulletRewriterUserPrompt(
+            bullet,
+            company,
+            title,
+            jdProfile as Record<string, unknown>
+          ),
+          RewrittenBulletSchema
+        );
+        console.log("[tailor-run] Step 4 bullet complete");
+        return ok({ rewrittenBullet });
+      }
+
+      // ── Step 5: Gap analysis ──────────────────────────────────────────────
+      case "5": {
+        const { resumeProfile, jdProfile } = body;
+        if (!resumeProfile || !jdProfile) {
+          return badRequest("resumeProfile and jdProfile are required");
+        }
+        console.log("[tailor-run] Step 5: Gap analysis...");
+        const gapResult = await callGroq(
+          GAP_ANALYSIS_SYSTEM_PROMPT,
+          buildGapAnalysisUserPrompt(
+            resumeProfile as Record<string, unknown>,
+            jdProfile as Record<string, unknown>
+          ),
+          GapAnalysisResultSchema
+        );
+        const order: Record<string, number> = { high: 0, medium: 1, low: 2 };
+        const gaps = [...gapResult.gaps].sort(
+          (a, b) => (order[a.importance] ?? 3) - (order[b.importance] ?? 3)
+        );
+        console.log("[tailor-run] Step 5 complete");
+        return ok({ gaps });
+      }
+
+      // ── Step 6: Score tailored resume ─────────────────────────────────────
+      // The client assembles tailoredForScoring from resumeProfile + tailored
+      // bullets collected during the Step 4 bullet loop, then sends it here.
+      case "6": {
+        const { resumeProfile, jdProfile } = body;
+        if (!resumeProfile || !jdProfile) {
+          return badRequest(
+            "resumeProfile (tailored version) and jdProfile are required"
+          );
+        }
+        console.log("[tailor-run] Step 6: Scoring tailored resume...");
+        const tailoredScore = await callGroq(
+          MATCH_SCORING_SYSTEM_PROMPT,
+          buildMatchScoringUserPrompt(
+            resumeProfile as Record<string, unknown>,
+            jdProfile as Record<string, unknown>
+          ),
+          MatchScoreSchema
+        );
+        console.log("[tailor-run] Step 6 complete");
+        return ok({ tailoredScore });
+      }
+
+      default:
+        return NextResponse.json(
+          { error: `Unknown step "${step}". Must be 1–6.` },
+          { status: 400 }
+        );
     }
-
-    const tailoredResume: TailoredResume = {
-      tailoredSummary:
-        resumeProfile.summary ||
-        `Professional applying for ${jdProfile.jobTitle} at ${jdProfile.company}.`,
-      tailoredSkills: mergeSkills(
-        resumeProfile.skills,
-        jdProfile.requiredSkills,
-        jdProfile.preferredSkills
-      ),
-      tailoredExperience,
-    };
-
-    // ── Step 5: Gap analysis ────────────────────────────────────────────
-    console.log("[tailor-run] Step 5: Analyzing gaps...");
-    let gaps: ResumeGap[] = [];
-    try {
-      const gapResult = await callGroq(
-        GAP_ANALYSIS_SYSTEM_PROMPT,
-        buildGapAnalysisUserPrompt(
-          resumeProfile as unknown as Record<string, unknown>,
-          jdProfile as unknown as Record<string, unknown>
-        ),
-        GapAnalysisResultSchema
-      );
-      const order: Record<string, number> = { high: 0, medium: 1, low: 2 };
-      gaps = [...gapResult.gaps].sort(
-        (a, b) => (order[a.importance] ?? 3) - (order[b.importance] ?? 3)
-      );
-    } catch (err) {
-      console.error("[tailor-run] Gap analysis failed:", err);
-      errors.push("Gap analysis failed");
-    }
-
-    // ── Step 6: Score (tailored) ────────────────────────────────────────
-    console.log("[tailor-run] Step 6: Scoring tailored resume...");
-    // Build a "pseudo resume" with tailored bullets for scoring
-    const tailoredForScoring = {
-      ...resumeProfile,
-      summary: tailoredResume.tailoredSummary,
-      skills: tailoredResume.tailoredSkills,
-      experience: resumeProfile.experience.map((exp, i) => ({
-        ...exp,
-        bullets:
-          tailoredExperience[i]?.bullets.map((b) => b.tailored) ?? exp.bullets,
-      })),
-    };
-
-    const tailoredScore = await callGroq<MatchScore>(
-      MATCH_SCORING_SYSTEM_PROMPT,
-      buildMatchScoringUserPrompt(
-        tailoredForScoring as unknown as Record<string, unknown>,
-        jdProfile as unknown as Record<string, unknown>
-      ),
-      MatchScoreSchema
-    );
-
-    // ── Assemble TailoringRun ───────────────────────────────────────────
-    const runId = crypto.randomUUID();
-    const run: TailoringRun = {
-      id: runId,
-      createdAt: new Date().toISOString(),
-      resumeProfile,
-      jdProfile,
-      originalScore,
-      tailoredResume,
-      tailoredScore,
-      gaps,
-    };
-
-    if (errors.length > 0) {
-      status = "partial";
-    }
-
-    // ── Persist to SQLite ───────────────────────────────────────────────
-    try {
-      await db.tailoringRunRecord.create({
-        data: {
-          id: run.id,
-          jobTitle: jdProfile.jobTitle,
-          company: jdProfile.company,
-          originalScore: originalScore.overallScore,
-          tailoredScore: tailoredScore.overallScore,
-          runJson: JSON.stringify(run),
-        },
-      });
-      console.log(`[tailor-run] Saved run ${run.id} to DB`);
-    } catch (dbErr) {
-      console.error("[tailor-run] DB save failed (non-fatal):", dbErr);
-    }
-
-    console.log(
-      `[tailor-run] Pipeline complete — status=${status}, original=${originalScore.overallScore}, tailored=${tailoredScore.overallScore}`
-    );
-
-    return NextResponse.json({ run, status, errors: errors.length > 0 ? errors : undefined });
   } catch (error) {
-    console.error("[tailor-run] Fatal error:", error);
+    console.error(`[tailor-run] Step ${step} failed:`, error);
     const message =
-      error instanceof Error ? error.message : "Pipeline failed";
-    return NextResponse.json(
-      { error: message, status: "error", errors: [...errors, message] },
-      { status: 500 }
-    );
+      error instanceof Error ? error.message : "An unexpected error occurred";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
-}
-
-function mergeSkills(
-  resumeSkills: string[],
-  requiredSkills: string[],
-  preferredSkills: string[]
-): string[] {
-  const resumeLower = new Set(resumeSkills.map((s) => s.toLowerCase()));
-  const jdMatched: string[] = [];
-  for (const skill of [...requiredSkills, ...preferredSkills]) {
-    if (resumeLower.has(skill.toLowerCase()) && !jdMatched.includes(skill)) {
-      jdMatched.push(skill);
-    }
-  }
-  const remaining = resumeSkills.filter((s) => !jdMatched.includes(s));
-  return [...jdMatched, ...remaining];
 }

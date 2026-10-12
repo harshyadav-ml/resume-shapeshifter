@@ -5,6 +5,9 @@
     "app/api/tailor-run/route.ts": {
       "maxDuration": 60
     },
+    "app/api/history/save/route.ts": {
+      "maxDuration": 10
+    },
     "app/api/run/[id]/route.ts": {
       "maxDuration": 10
     }
