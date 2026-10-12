@@ -25,7 +25,8 @@ RULES:
 - canSafelyAdd=true only when the resume has clear supporting evidence.
 - Limit to the top 8 most important gaps.
 - suggestedAction must be concrete, not generic ("Add X skill" is too vague).
-- Output ONLY valid JSON with a "gaps" array. No commentary, no markdown.
+- Output ONLY a raw JSON object. Absolutely NO markdown, NO code fences.
+- NEVER wrap output in \`\`\`json ... \`\`\` code fences — start your response with { and end with }.
 
 TRUTHFULNESS (non-negotiable):
 - Never suggest adding false claims to a resume.
@@ -55,5 +56,6 @@ ${JSON.stringify(resume, null, 2)}
 JOB DESCRIPTION (structured):
 ${JSON.stringify(jd, null, 2)}
 
-Return ONLY the JSON object with a "gaps" array. No markdown, no explanation.`;
+Return ONLY the raw JSON object — no markdown, no code fences, no explanation.
+Your entire response must start with { and end with }. Do NOT write \`\`\`json.`;
 }

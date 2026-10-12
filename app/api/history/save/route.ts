@@ -51,10 +51,23 @@ export async function POST(request: NextRequest) {
     console.log(`[history/save] Saved run ${run.id} to DB`);
     return NextResponse.json({ ok: true, id: run.id }, { status: 200 });
   } catch (err) {
-    // Non-fatal: the user still has their results in client state.
+    // Non-fatal — on Vercel the filesystem is read-only (SQLITE_CANTOPEN).
+    // Return 200 so the frontend never sees a failure; log the cause for
+    // diagnostics. History will simply be unavailable in this environment.
+    const message = err instanceof Error ? err.message : "Database save failed";
+    const isSqliteUnavailable =
+      message.includes("SQLITE_CANTOPEN") ||
+      message.includes("SQLITE_READONLY") ||
+      message.includes("no such file") ||
+      process.env.VERCEL === "1";
+
+    if (isSqliteUnavailable) {
+      console.warn("[history/save] SQLite unavailable (read-only FS) — skipping persistence:", message);
+      return NextResponse.json({ ok: true, skipped: true, reason: "sqlite_unavailable" }, { status: 200 });
+    }
+
+    // Unexpected DB error — still non-fatal but log loudly.
     console.error("[history/save] DB save failed:", err);
-    const message =
-      err instanceof Error ? err.message : "Database save failed";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ ok: false, error: message }, { status: 200 });
   }
 }

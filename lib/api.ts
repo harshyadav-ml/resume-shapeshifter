@@ -26,9 +26,15 @@ import type {
   RewrittenBullet,
 } from "@/types";
 
-// ── Throttle delay ───────────────────────────────────────────────────────────
-// 2.5 s between every Groq API call (step transitions AND individual bullets)
+// ── Throttle delays ─────────────────────────────────────────────────────────
+// 2.5 s between pipeline step transitions (Steps 1→2→3 etc.)
 const STEP_DELAY_MS = 2500;
+// 4 s between individual bullet rewrites — stays under Groq's TPM window
+// on Hobby-tier keys even with long resumes (12–15 bullets).
+const BULLET_DELAY_MS = 4000;
+// After every N bullets, pause an extra 8 s to let the TPM bucket refill.
+const BULLET_BATCH_SIZE = 3;
+const BULLET_BATCH_PAUSE_MS = 8000;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -257,10 +263,22 @@ export async function runTailoringPipeline(
           errors.push(`Failed to rewrite bullet ${bulletCount} ("${bullet.slice(0, 50)}..."): ${errMsg}`);
         }
 
-        const isLastBullet = ei === safeResumeProfile.experience.length - 1 && bi === exp.bullets.length - 1;
+        const isLastBullet =
+          ei === safeResumeProfile.experience.length - 1 &&
+          bi === exp.bullets.length - 1;
+
         if (!isLastBullet) {
-          console.log(`[api] Waiting ${STEP_DELAY_MS}ms before next bullet…`);
-          await sleep(STEP_DELAY_MS);
+          // Every BULLET_BATCH_SIZE bullets, take an extended pause so the
+          // Groq TPM bucket can partially refill before the next batch.
+          if (bulletCount % BULLET_BATCH_SIZE === 0) {
+            console.log(
+              `[api] Batch pause after bullet ${bulletCount} — waiting ${BULLET_BATCH_PAUSE_MS}ms…`
+            );
+            await sleep(BULLET_BATCH_PAUSE_MS);
+          } else {
+            console.log(`[api] Waiting ${BULLET_DELAY_MS}ms before next bullet…`);
+            await sleep(BULLET_DELAY_MS);
+          }
         }
       }
     }
