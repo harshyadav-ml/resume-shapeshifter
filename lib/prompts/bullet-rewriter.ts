@@ -2,7 +2,12 @@
  * Bullet Rewriter Prompt — rewrites a single resume bullet to align with a JD.
  * Uses chain-of-thought: analyze → align → rewrite → flag risk.
  * Server-side only (used in API routes).
+ *
+ * @version BULLET_REWRITER_PROMPT_VERSION
  */
+
+/** Prompt version string — stored in DB run records for auditability. */
+export const BULLET_REWRITER_PROMPT_VERSION = "v2.1";
 
 export const BULLET_REWRITER_SYSTEM_PROMPT = `You are a senior technical resume writer who specialises in making bullets land hard with hiring managers and ATS systems.
 You will rewrite ONE resume bullet to maximally align with the target role — not just swap a word, but restructure for impact.
@@ -30,7 +35,7 @@ RISKFLAG RULES:
 
 HARD RULES (non-negotiable):
 - NEVER fabricate employers, job titles, dates, or certifications.
-- NEVER add technologies not mentioned in the original bullet.
+- NEVER add technologies NOT listed in the FACTUAL CLAIMS IN ORIGINAL section provided in the user prompt.
 - NEVER invent or inflate metrics (percentages, dollar amounts, team sizes).
 - NEVER change the fundamental meaning of the bullet.
 - Keep the bullet to 1–2 lines max — tight and scannable.
@@ -48,24 +53,94 @@ OUTPUT JSON SCHEMA:
   "riskFlag": string
 }`;
 
+/**
+ * Extracts factual claims from a bullet string for the ground-truth list.
+ *
+ * Extracts:
+ * - Capitalized words of ≥ 2 chars (proper nouns, tech names)
+ * - Numbers with %, $, or x suffix (metrics)
+ * - CamelCase tech identifiers (e.g. "TypeScript", "GraphQL", "PostgreSQL")
+ *
+ * @param bullet The original bullet text to extract claims from.
+ * @returns Deduplicated array of factual claim strings.
+ */
+export function extractFactualClaims(bullet: string): string[] {
+  const claims = new Set<string>();
 
+  // CamelCase identifiers (e.g. TypeScript, GraphQL, PostgreSQL, HBase)
+  const camelCasePattern = /\b[A-Z][a-z]*[A-Z]\w*/g;
+  Array.from(bullet.matchAll(camelCasePattern)).forEach((match) => {
+    claims.add(match[0]);
+  });
+
+  // Numbers with %, $, or x (e.g. "40%", "$2M", "3x")
+  const metricsPattern = /\b\d+(?:\.\d+)?[%$x]\b|\$\d+(?:\.\d+)?[KMBkmb]?\b/g;
+  Array.from(bullet.matchAll(metricsPattern)).forEach((match) => {
+    claims.add(match[0]);
+  });
+
+  // Capitalized words ≥ 2 chars that aren't common English starters
+  const capitalizedPattern = /\b[A-Z][a-zA-Z]{1,}\b/g;
+  const commonWords = new Set([
+    "The", "A", "An", "In", "On", "At", "For", "To", "By", "Of", "And", "Or",
+    "With", "As", "Is", "Was", "Are", "Were", "Has", "Have", "Had", "Be",
+    "Led", "Key", "New", "Own", "Set", "Got", "Put", "Use", "Via", "Per",
+  ]);
+  Array.from(bullet.matchAll(capitalizedPattern)).forEach((match) => {
+    if (!commonWords.has(match[0])) {
+      claims.add(match[0]);
+    }
+  });
+
+  return Array.from(claims);
+}
+
+/**
+ * Builds the user prompt for the bullet rewriter step.
+ *
+ * Includes a FACTUAL CLAIMS IN ORIGINAL section that gives the LLM a
+ * ground-truth list of technologies, numbers, and proper nouns extracted
+ * from the bullet text, preventing hallucinations in the rewrite.
+ *
+ * @param bullet  Original bullet text to rewrite.
+ * @param company Company name for context.
+ * @param title   Job title for context.
+ * @param jd      Structured JD object from the extraction step.
+ */
 export function buildBulletRewriterUserPrompt(
   bullet: string,
   company: string,
   title: string,
   jd: Record<string, unknown>
 ): string {
-  const required = (jd.requiredSkills as string[] || []).slice(0, 8).join(", ");
-  const keywords = (jd.keywords as string[] || []).slice(0, 10).join(", ");
-  const responsibilities = (jd.responsibilities as string[] || [])
+  // Safe access pattern for all JD array fields
+  const required = (Array.isArray(jd.requiredSkills) ? (jd.requiredSkills as string[]) : [])
+    .slice(0, 8)
+    .join(", ");
+  const keywords = (Array.isArray(jd.keywords) ? (jd.keywords as string[]) : [])
+    .slice(0, 10)
+    .join(", ");
+  const responsibilities = (
+    Array.isArray(jd.responsibilities) ? (jd.responsibilities as string[]) : []
+  )
     .slice(0, 5)
     .map((r: string) => `- ${r}`)
     .join("\n");
+
+  // Extract factual claims from the original bullet for the ground-truth list
+  const factualClaims = extractFactualClaims(bullet);
+  const claimsSection =
+    factualClaims.length > 0
+      ? factualClaims.join(", ")
+      : "(no specific technologies, metrics, or proper nouns detected)";
 
   return `Rewrite the following resume bullet to better match the job description.
 
 ORIGINAL BULLET (from ${company} — ${title}):
 "${bullet}"
+
+FACTUAL CLAIMS IN ORIGINAL (ground truth — DO NOT add anything not in this list):
+${claimsSection}
 
 JOB CONTEXT:
 - Role: ${jd.jobTitle} at ${jd.company}

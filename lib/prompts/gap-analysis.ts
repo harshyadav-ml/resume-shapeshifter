@@ -1,7 +1,12 @@
 /**
  * Gap Analysis Prompt — identifies skill/experience gaps between resume and JD.
  * Server-side only (used in API routes).
+ *
+ * @version GAP_ANALYSIS_PROMPT_VERSION
  */
+
+/** Prompt version string — stored in DB run records for auditability. */
+export const GAP_ANALYSIS_PROMPT_VERSION = "v2.1";
 
 export const GAP_ANALYSIS_SYSTEM_PROMPT = `You are an expert career coach analyzing the gap between a resume and a job description.
 Identify requirements in the JD that are missing or weakly represented in the resume.
@@ -44,6 +49,12 @@ OUTPUT JSON SCHEMA:
   }]
 }`;
 
+/**
+ * Builds the user prompt for the gap analysis step.
+ *
+ * @param resume Structured resume object from the LLM or validated schema.
+ * @param jd     Structured JD object from the extraction step.
+ */
 export function buildGapAnalysisUserPrompt(
   resume: Record<string, unknown>,
   jd: Record<string, unknown>

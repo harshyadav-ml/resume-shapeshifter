@@ -25,6 +25,12 @@ import type {
   TailoredResume,
   RewrittenBullet,
 } from "@/types";
+import { mergeSkills } from "@/lib/utils";
+import { RESUME_PARSER_PROMPT_VERSION } from "@/lib/prompts/resume-parser";
+import { JD_EXTRACTION_PROMPT_VERSION } from "@/lib/prompts/jd-extraction";
+import { MATCH_SCORING_PROMPT_VERSION } from "@/lib/prompts/match-scoring";
+import { BULLET_REWRITER_PROMPT_VERSION } from "@/lib/prompts/bullet-rewriter";
+import { GAP_ANALYSIS_PROMPT_VERSION } from "@/lib/prompts/gap-analysis";
 
 // ── Throttle delays ─────────────────────────────────────────────────────────
 // 2.5 s between pipeline step transitions (Steps 1→2→3 etc.)
@@ -39,6 +45,18 @@ const BULLET_RATE_LIMIT_RETRY_MS = 10_000;
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
+
+// ── Typed fallback constant ──────────────────────────────────────────────────
+/**
+ * Placeholder RewrittenBullet used when a bullet rewrite fails entirely.
+ * Defined as a constant so it's never accidentally mutated inline.
+ */
+export const BULLET_FALLBACK = {
+  changeReason: "Rewrite failed — using original" as const,
+  keywordsAddressed: [] as string[],
+  confidence: "low" as const,
+  riskFlag: "Rewrite failed. Verify manually." as const,
+} satisfies Partial<RewrittenBullet>;
 
 // ── Error type ──────────────────────────────────────────────────────────────
 
@@ -56,6 +74,8 @@ export interface TailoringRunResult {
   run: TailoringRun;
   status: "success" | "partial" | "error";
   errors?: string[];
+  /** Step-level non-fatal failures that are not pipeline blockers. */
+  softFailures?: string[];
 }
 
 export interface PipelineProgressEvent {
@@ -68,6 +88,10 @@ export interface PipelineProgressEvent {
 /**
  * Deep-clone via JSON round-trip so that any undefined fields (e.g. optional
  * Zod-defaulted values) are stripped BEFORE we hand the object to callStep.
+ *
+ * NOTE: `JSON.parse(JSON.stringify(...))` also strips non-JSON-serialisable
+ * values (Date objects, functions, symbols, class instances). Only use it for
+ * plain data objects derived from Zod schema output.
  */
 function jsonClone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
@@ -76,9 +100,18 @@ function jsonClone<T>(value: T): T {
 const MAX_RETRIES = 3;
 const DEFAULT_RATE_LIMIT_WAIT_MS = 60_000; // 60 s — Groq's TPM bucket reset window
 
+/**
+ * POST to /api/tailor-run?step=N with retry logic for 429 responses.
+ * Accepts an optional AbortSignal so the caller can cancel in-flight requests.
+ *
+ * @param step   The step number as a string (e.g. "1", "4").
+ * @param body   Request body sent as JSON.
+ * @param signal Optional AbortSignal from a pipeline-level AbortController.
+ */
 async function callStep<T>(
   step: string,
-  body: Record<string, unknown>
+  body: Record<string, unknown>,
+  signal?: AbortSignal
 ): Promise<T> {
   const serialisedBody = JSON.stringify(body);
 
@@ -89,6 +122,7 @@ async function callStep<T>(
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: serialisedBody,
+      signal, // propagate pipeline-level abort signal
     });
 
     // ── 429 Rate-limited — back off and retry ─────────────────────────────
@@ -104,13 +138,13 @@ async function callStep<T>(
       // Read retry-after from the header (Groq returns it in seconds)
       const retryAfterHeader = response.headers.get("retry-after");
       const waitSeconds = retryAfterHeader
-        ? Math.max(parseFloat(retryAfterHeader), 1) + 1  // header value + 1s buffer
-        : DEFAULT_RATE_LIMIT_WAIT_MS / 1000;             // fallback: 60 s
+        ? Math.max(parseFloat(retryAfterHeader), 1) + 1 // header value + 1s buffer
+        : DEFAULT_RATE_LIMIT_WAIT_MS / 1000;            // fallback: 60 s
 
       const waitMs = waitSeconds * 1000;
       console.warn(
         `[api] ⏳ Step ${step} rate-limited (429). ` +
-        `Waiting ${waitSeconds.toFixed(0)}s before retry ${attempt + 1}/${MAX_RETRIES}…`
+          `Waiting ${waitSeconds.toFixed(0)}s before retry ${attempt + 1}/${MAX_RETRIES}…`
       );
       await sleep(waitMs);
       continue; // retry same attempt loop
@@ -153,22 +187,6 @@ async function callStep<T>(
   throw new ApiError(`Step ${step} failed after ${MAX_RETRIES} attempts`, 500);
 }
 
-function mergeSkills(
-  resumeSkills: string[],
-  requiredSkills: string[],
-  preferredSkills: string[]
-): string[] {
-  const resumeLower = new Set(resumeSkills.map((s) => s.toLowerCase()));
-  const jdMatched: string[] = [];
-  for (const skill of [...requiredSkills, ...preferredSkills]) {
-    if (resumeLower.has(skill.toLowerCase()) && !jdMatched.includes(skill)) {
-      jdMatched.push(skill);
-    }
-  }
-  const remaining = resumeSkills.filter((s) => !jdMatched.includes(s));
-  return [...jdMatched, ...remaining];
-}
-
 // ── Bullet-level 429 retry wrapper ──────────────────────────────────────────
 // callStep already retries 429s using the Retry-After header (up to 3×).
 // This wrapper is the outermost safety net: if a 429 still escapes, we wait
@@ -177,15 +195,15 @@ async function rewriteBullet(
   bullet: string,
   company: string,
   title: string,
-  jdProfile: Record<string, unknown>
+  jdProfile: Record<string, unknown>,
+  signal?: AbortSignal
 ): Promise<RewrittenBullet> {
   try {
-    const { rewrittenBullet } = await callStep<{ rewrittenBullet: RewrittenBullet }>("4", {
-      bullet,
-      company,
-      title,
-      jdProfile,
-    });
+    const { rewrittenBullet } = await callStep<{ rewrittenBullet: RewrittenBullet }>(
+      "4",
+      { bullet, company, title, jdProfile },
+      signal
+    );
     return rewrittenBullet;
   } catch (err) {
     if (err instanceof ApiError && err.status === 429) {
@@ -194,12 +212,11 @@ async function rewriteBullet(
       );
       await sleep(BULLET_RATE_LIMIT_RETRY_MS);
       // Final attempt — let any error propagate naturally to the outer catch.
-      const { rewrittenBullet } = await callStep<{ rewrittenBullet: RewrittenBullet }>("4", {
-        bullet,
-        company,
-        title,
-        jdProfile,
-      });
+      const { rewrittenBullet } = await callStep<{ rewrittenBullet: RewrittenBullet }>(
+        "4",
+        { bullet, company, title, jdProfile },
+        signal
+      );
       return rewrittenBullet;
     }
     throw err; // non-429 errors propagate immediately
@@ -208,12 +225,27 @@ async function rewriteBullet(
 
 // ── Full pipeline orchestrator ───────────────────────────────────────────────
 
+/**
+ * Drives the full 6-step tailoring pipeline from the browser.
+ *
+ * @param resumeText  Raw resume text input by the user.
+ * @param jdText      Raw job description text input by the user.
+ * @param onProgress  Optional callback invoked at each major pipeline step.
+ * @param signal      Optional AbortSignal. When aborted, all in-flight fetch
+ *                    requests are cancelled via the signal propagation in callStep.
+ *                    Pass `new AbortController().signal` and call `.abort()` when
+ *                    the user navigates away.
+ */
 export async function runTailoringPipeline(
   resumeText: string,
   jdText: string,
-  onProgress?: (event: PipelineProgressEvent) => void
+  onProgress?: (event: PipelineProgressEvent) => void,
+  signal?: AbortSignal
 ): Promise<TailoringRunResult> {
-  const errors: string[] = [];
+  // Collect non-fatal bullet-level errors separately from fatal pipeline errors
+  const bulletErrors: string[] = [];
+  // Collect step-level soft failures (gap analysis, tailored scoring)
+  const softFailures: string[] = [];
 
   try {
     // ── Step 1: Parse resume ──────────────────────────────────────────────
@@ -221,7 +253,8 @@ export async function runTailoringPipeline(
     onProgress?.({ step: "1/6", message: "Parsing resume…" });
     const { resumeProfile } = await callStep<{ resumeProfile: ResumeProfile }>(
       "1",
-      { resumeText }
+      { resumeText },
+      signal
     );
     const safeResumeProfile = jsonClone(resumeProfile);
     await sleep(STEP_DELAY_MS);
@@ -231,7 +264,8 @@ export async function runTailoringPipeline(
     onProgress?.({ step: "2/6", message: "Parsing job description…" });
     const { jdProfile } = await callStep<{ jdProfile: JobDescriptionProfile }>(
       "2",
-      { jdText }
+      { jdText },
+      signal
     );
     const safeJdProfile = jsonClone(jdProfile);
     await sleep(STEP_DELAY_MS);
@@ -241,7 +275,8 @@ export async function runTailoringPipeline(
     onProgress?.({ step: "3/6", message: "Scoring original resume…" });
     const { originalScore } = await callStep<{ originalScore: MatchScore }>(
       "3",
-      { resumeProfile: safeResumeProfile, jdProfile: safeJdProfile }
+      { resumeProfile: safeResumeProfile, jdProfile: safeJdProfile },
+      signal
     );
     await sleep(STEP_DELAY_MS);
 
@@ -249,6 +284,7 @@ export async function runTailoringPipeline(
     console.log("[api] Step 4 — bullet rewrites");
     onProgress?.({ step: "4/6", message: "Tailoring bullets…" });
 
+    // Pre-populate with fallback bullets so any failures still have valid data
     const tailoredExperience: TailoredExperienceEntry[] = safeResumeProfile.experience.map(
       (exp) => ({
         company: exp.company,
@@ -256,10 +292,7 @@ export async function runTailoringPipeline(
         bullets: exp.bullets.map((b) => ({
           original: b,
           tailored: b,
-          changeReason: "Rewrite failed — using original",
-          keywordsAddressed: [] as string[],
-          confidence: "low" as const,
-          riskFlag: "Rewrite failed. Verify manually.",
+          ...BULLET_FALLBACK,
         })),
       })
     );
@@ -280,21 +313,27 @@ export async function runTailoringPipeline(
 
         try {
           if (!bullet || typeof bullet !== "string") {
-            throw new Error(`Bullet at [${ei}][${bi}] is not a string: ${JSON.stringify(bullet)}`);
+            throw new Error(
+              `Bullet at [${ei}][${bi}] is not a string: ${JSON.stringify(bullet)}`
+            );
           }
 
           const rewrittenBullet = await rewriteBullet(
             bullet,
             exp.company,
             exp.title,
-            safeJdProfile as unknown as Record<string, unknown>
+            safeJdProfile as unknown as Record<string, unknown>,
+            signal
           );
           tailoredExperience[ei].bullets[bi] = rewrittenBullet;
           console.log(`[api] Bullet ${bulletCount}/${totalBullets} ✓`);
         } catch (err) {
           const errMsg = err instanceof Error ? err.message : String(err);
           console.error(`[api] Bullet ${bulletCount}/${totalBullets} FAILED:`, errMsg);
-          errors.push(`Failed to rewrite bullet ${bulletCount} ("${bullet.slice(0, 50)}..."): ${errMsg}`);
+          bulletErrors.push(
+            `Failed to rewrite bullet ${bulletCount} ("${bullet.slice(0, 50)}..."): ${errMsg}`
+          );
+          // Fallback is already pre-populated above — nothing more to do here
         }
 
         // Flat 3.5 s delay after every bullet (skip after the last one).
@@ -309,8 +348,14 @@ export async function runTailoringPipeline(
     }
 
     const tailoredResume: TailoredResume = {
-      tailoredSummary: safeResumeProfile.summary || `Professional applying for ${safeJdProfile.jobTitle} at ${safeJdProfile.company}.`,
-      tailoredSkills: mergeSkills(safeResumeProfile.skills, safeJdProfile.requiredSkills, safeJdProfile.preferredSkills),
+      tailoredSummary:
+        safeResumeProfile.summary ||
+        `Professional applying for ${safeJdProfile.jobTitle} at ${safeJdProfile.company}.`,
+      tailoredSkills: mergeSkills(
+        safeResumeProfile.skills,
+        safeJdProfile.requiredSkills,
+        safeJdProfile.preferredSkills
+      ),
       tailoredExperience,
     };
 
@@ -319,16 +364,17 @@ export async function runTailoringPipeline(
     onProgress?.({ step: "5/6", message: "Analyzing gaps…" });
     let gaps: ResumeGap[] = [];
     try {
-      const result = await callStep<{ gaps: ResumeGap[] }>("5", {
-        resumeProfile: safeResumeProfile,
-        jdProfile: safeJdProfile,
-      });
+      const result = await callStep<{ gaps: ResumeGap[] }>(
+        "5",
+        { resumeProfile: safeResumeProfile, jdProfile: safeJdProfile },
+        signal
+      );
       gaps = result.gaps ?? [];
       console.log(`[api] Step 5 ✓ — ${gaps.length} gaps found`);
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
       console.error("[api] Step 5 gap analysis FAILED:", errMsg);
-      errors.push(`Gap analysis failed: ${errMsg}`);
+      softFailures.push(`Gap analysis failed: ${errMsg}`);
     }
     await sleep(STEP_DELAY_MS);
 
@@ -348,16 +394,17 @@ export async function runTailoringPipeline(
 
     let tailoredScore: MatchScore;
     try {
-      const result = await callStep<{ tailoredScore: MatchScore }>("6", {
-        resumeProfile: tailoredForScoring,
-        jdProfile: safeJdProfile,
-      });
+      const result = await callStep<{ tailoredScore: MatchScore }>(
+        "6",
+        { resumeProfile: tailoredForScoring, jdProfile: safeJdProfile },
+        signal
+      );
       tailoredScore = result.tailoredScore;
       console.log(`[api] Step 6 ✓ — tailored score: ${tailoredScore.overallScore}`);
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
       console.error("[api] Step 6 FAILED:", errMsg);
-      errors.push(`Tailored scoring failed: ${errMsg}`);
+      softFailures.push(`Tailored scoring failed: ${errMsg}`);
       tailoredScore = {
         overallScore: originalScore.overallScore,
         skillCoverageScore: originalScore.skillCoverageScore,
@@ -380,13 +427,28 @@ export async function runTailoringPipeline(
       gaps,
     };
 
-    const status: "success" | "partial" = errors.length > 0 ? "partial" : "success";
+    // Fatal errors = bullet errors that blocked rewrites
+    // Soft failures = gap analysis / tailored score failures (non-blocking)
+    const allErrors = [...bulletErrors];
+    const hasFatalErrors = false; // steps 1–3 fatal errors throw above
+    const hasAnyError = allErrors.length > 0 || softFailures.length > 0;
+    const status: "success" | "partial" = hasAnyError || hasFatalErrors ? "partial" : "success";
+
+    // Prompt versions map for auditability in the DB run record
+    const promptVersions: Record<string, string> = {
+      resumeParser: RESUME_PARSER_PROMPT_VERSION,
+      jdExtraction: JD_EXTRACTION_PROMPT_VERSION,
+      matchScoring: MATCH_SCORING_PROMPT_VERSION,
+      bulletRewriter: BULLET_REWRITER_PROMPT_VERSION,
+      gapAnalysis: GAP_ANALYSIS_PROMPT_VERSION,
+    };
 
     try {
       const saveRes = await fetch("/api/history/save", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ run }),
+        body: JSON.stringify({ run, promptVersions }),
+        signal, // also pass signal to allow aborting save
       });
       if (!saveRes.ok) {
         console.warn("[api] DB save non-fatal error:", saveRes.status);
@@ -395,10 +457,19 @@ export async function runTailoringPipeline(
       console.warn("[api] DB save request failed (non-fatal):", err);
     }
 
-    return { run, status, errors: errors.length > 0 ? errors : undefined };
-
+    return {
+      run,
+      status,
+      errors: allErrors.length > 0 ? allErrors : undefined,
+      softFailures: softFailures.length > 0 ? softFailures : undefined,
+    };
   } catch (err) {
-    const message = err instanceof ApiError ? err.message : err instanceof Error ? `Pipeline error: ${err.message}` : "An unexpected error occurred in the tailoring pipeline.";
+    const message =
+      err instanceof ApiError
+        ? err.message
+        : err instanceof Error
+          ? `Pipeline error: ${err.message}`
+          : "An unexpected error occurred in the tailoring pipeline.";
     console.error("[api] ✗ FATAL pipeline error:", err);
     throw new ApiError(message, err instanceof ApiError ? err.status : 500);
   }

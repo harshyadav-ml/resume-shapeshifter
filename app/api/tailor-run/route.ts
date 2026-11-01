@@ -15,6 +15,9 @@
  *
  * NO streaming. NO runtime = 'edge'. NO sleep(). Each request completes
  * in under 15 seconds, safely within Vercel Hobby's 60-second limit.
+ *
+ * Input validation: every request body is validated through `StepInputSchemas`
+ * before the LLM is called. Invalid input returns HTTP 422 with Zod issue details.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -27,34 +30,54 @@ import {
   MatchScoreSchema,
   GapAnalysisResultSchema,
   RewrittenBulletSchema,
+  StepInputSchemas,
 } from "@/lib/schemas";
 import {
   RESUME_PARSER_SYSTEM_PROMPT,
   buildResumeParserUserPrompt,
+  RESUME_PARSER_PROMPT_VERSION,
 } from "@/lib/prompts/resume-parser";
 import {
   JD_EXTRACTION_SYSTEM_PROMPT,
   buildJDExtractionUserPrompt,
+  JD_EXTRACTION_PROMPT_VERSION,
 } from "@/lib/prompts/jd-extraction";
 import {
   MATCH_SCORING_SYSTEM_PROMPT,
   buildMatchScoringUserPrompt,
+  MATCH_SCORING_PROMPT_VERSION,
 } from "@/lib/prompts/match-scoring";
 import {
   BULLET_REWRITER_SYSTEM_PROMPT,
   buildBulletRewriterUserPrompt,
+  BULLET_REWRITER_PROMPT_VERSION,
 } from "@/lib/prompts/bullet-rewriter";
 import {
   GAP_ANALYSIS_SYSTEM_PROMPT,
   buildGapAnalysisUserPrompt,
+  GAP_ANALYSIS_PROMPT_VERSION,
 } from "@/lib/prompts/gap-analysis";
+import { ZodError } from "zod";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function badRequest(message: string) {
-  return NextResponse.json({ error: message }, { status: 400 });
+/** Returns HTTP 422 with a structured Zod error payload. */
+function unprocessableEntity(message: string, issues: ZodError["issues"]) {
+  return NextResponse.json(
+    { error: message, code: "INVALID_INPUT", details: issues },
+    { status: 422 }
+  );
 }
 
+/** Returns HTTP 400 for entirely malformed requests (bad JSON, unknown step). */
+function badRequest(message: string) {
+  return NextResponse.json(
+    { error: message, code: "BAD_REQUEST" },
+    { status: 400 }
+  );
+}
+
+/** Returns HTTP 200 with a typed data payload. */
 function ok(data: Record<string, unknown>) {
   return NextResponse.json(data, { status: 200 });
 }
@@ -65,10 +88,10 @@ export async function POST(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const step = searchParams.get("step");
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let body: Record<string, any>;
+  // Parse request body as unknown — we will validate via Zod below
+  let rawBody: unknown;
   try {
-    body = await request.json();
+    rawBody = await request.json();
   } catch {
     return badRequest("Invalid JSON body");
   }
@@ -77,15 +100,19 @@ export async function POST(request: NextRequest) {
     switch (step) {
       // ── Step 1: Parse resume ──────────────────────────────────────────────
       case "1": {
-        const { resumeText } = body;
-        if (!resumeText || typeof resumeText !== "string") {
-          return badRequest("resumeText (string) is required");
+        const parsed = StepInputSchemas["1"].safeParse(rawBody);
+        if (!parsed.success) {
+          return unprocessableEntity("Invalid request body for step 1", parsed.error.issues);
         }
-        console.log("[tailor-run] Step 1: Parsing resume...");
+        const { resumeText } = parsed.data;
+        console.log("[tailor-run] Step 1: Parsing resume...", {
+          promptVersion: RESUME_PARSER_PROMPT_VERSION,
+        });
         const resumeProfile = await callGroq(
           RESUME_PARSER_SYSTEM_PROMPT,
           buildResumeParserUserPrompt(resumeText),
-          ResumeProfileSchema
+          ResumeProfileSchema,
+          { maxTokens: 2048 }
         );
         console.log("[tailor-run] Step 1 complete");
         return ok({ resumeProfile });
@@ -93,15 +120,19 @@ export async function POST(request: NextRequest) {
 
       // ── Step 2: Parse JD ──────────────────────────────────────────────────
       case "2": {
-        const { jdText } = body;
-        if (!jdText || typeof jdText !== "string") {
-          return badRequest("jdText (string) is required");
+        const parsed = StepInputSchemas["2"].safeParse(rawBody);
+        if (!parsed.success) {
+          return unprocessableEntity("Invalid request body for step 2", parsed.error.issues);
         }
-        console.log("[tailor-run] Step 2: Parsing JD...");
+        const { jdText } = parsed.data;
+        console.log("[tailor-run] Step 2: Parsing JD...", {
+          promptVersion: JD_EXTRACTION_PROMPT_VERSION,
+        });
         const jdProfile = await callGroq(
           JD_EXTRACTION_SYSTEM_PROMPT,
           buildJDExtractionUserPrompt(jdText),
-          JobDescriptionProfileSchema
+          JobDescriptionProfileSchema,
+          { maxTokens: 2048 }
         );
         console.log("[tailor-run] Step 2 complete");
         return ok({ jdProfile });
@@ -109,18 +140,23 @@ export async function POST(request: NextRequest) {
 
       // ── Step 3: Score original ────────────────────────────────────────────
       case "3": {
-        const { resumeProfile, jdProfile } = body;
-        if (!resumeProfile || !jdProfile) {
-          return badRequest("resumeProfile and jdProfile are required");
+        const parsed = StepInputSchemas["3"].safeParse(rawBody);
+        if (!parsed.success) {
+          return unprocessableEntity("Invalid request body for step 3", parsed.error.issues);
         }
-        console.log("[tailor-run] Step 3: Scoring original resume...");
+        // parsed.data.resumeProfile and jdProfile are fully validated by Zod
+        const { resumeProfile, jdProfile } = parsed.data;
+        console.log("[tailor-run] Step 3: Scoring original resume...", {
+          promptVersion: MATCH_SCORING_PROMPT_VERSION,
+        });
         const originalScore = await callGroq(
           MATCH_SCORING_SYSTEM_PROMPT,
           buildMatchScoringUserPrompt(
-            resumeProfile as Record<string, unknown>,
-            jdProfile as Record<string, unknown>
+            resumeProfile as unknown as Record<string, unknown>,
+            jdProfile as unknown as Record<string, unknown>
           ),
-          MatchScoreSchema
+          MatchScoreSchema,
+          { maxTokens: 1024 }
         );
         console.log("[tailor-run] Step 3 complete");
         return ok({ originalScore });
@@ -129,19 +165,14 @@ export async function POST(request: NextRequest) {
       // ── Step 4: Rewrite a single bullet ──────────────────────────────────
       // The client calls this once per bullet, waiting 2.5s between each call.
       case "4": {
-        const { bullet, company, title, jdProfile } = body;
-        if (
-          !bullet || typeof bullet !== "string" ||
-          !company || typeof company !== "string" ||
-          !title || typeof title !== "string" ||
-          !jdProfile
-        ) {
-          return badRequest(
-            "bullet (string), company (string), title (string), and jdProfile are required"
-          );
+        const parsed = StepInputSchemas["4"].safeParse(rawBody);
+        if (!parsed.success) {
+          return unprocessableEntity("Invalid request body for step 4", parsed.error.issues);
         }
+        const { bullet, company, title, jdProfile } = parsed.data;
         console.log(
-          `[tailor-run] Step 4: Rewriting bullet for ${company} — "${(bullet as string).slice(0, 40)}..."`
+          `[tailor-run] Step 4: Rewriting bullet for ${company} — "${bullet.slice(0, 40)}..."`,
+          { promptVersion: BULLET_REWRITER_PROMPT_VERSION }
         );
         const rewrittenBullet = await callGroq(
           BULLET_REWRITER_SYSTEM_PROMPT,
@@ -149,9 +180,10 @@ export async function POST(request: NextRequest) {
             bullet,
             company,
             title,
-            jdProfile as Record<string, unknown>
+            jdProfile as unknown as Record<string, unknown>
           ),
-          RewrittenBulletSchema
+          RewrittenBulletSchema,
+          { maxTokens: 1024 }
         );
         console.log("[tailor-run] Step 4 bullet complete");
         return ok({ rewrittenBullet });
@@ -159,18 +191,22 @@ export async function POST(request: NextRequest) {
 
       // ── Step 5: Gap analysis ──────────────────────────────────────────────
       case "5": {
-        const { resumeProfile, jdProfile } = body;
-        if (!resumeProfile || !jdProfile) {
-          return badRequest("resumeProfile and jdProfile are required");
+        const parsed = StepInputSchemas["5"].safeParse(rawBody);
+        if (!parsed.success) {
+          return unprocessableEntity("Invalid request body for step 5", parsed.error.issues);
         }
-        console.log("[tailor-run] Step 5: Gap analysis...");
+        const { resumeProfile, jdProfile } = parsed.data;
+        console.log("[tailor-run] Step 5: Gap analysis...", {
+          promptVersion: GAP_ANALYSIS_PROMPT_VERSION,
+        });
         const gapResult = await callGroq(
           GAP_ANALYSIS_SYSTEM_PROMPT,
           buildGapAnalysisUserPrompt(
-            resumeProfile as Record<string, unknown>,
-            jdProfile as Record<string, unknown>
+            resumeProfile as unknown as Record<string, unknown>,
+            jdProfile as unknown as Record<string, unknown>
           ),
-          GapAnalysisResultSchema
+          GapAnalysisResultSchema,
+          { maxTokens: 2048 }
         );
         const order: Record<string, number> = { high: 0, medium: 1, low: 2 };
         const gaps = [...gapResult.gaps].sort(
@@ -184,35 +220,37 @@ export async function POST(request: NextRequest) {
       // The client assembles tailoredForScoring from resumeProfile + tailored
       // bullets collected during the Step 4 bullet loop, then sends it here.
       case "6": {
-        const { resumeProfile, jdProfile } = body;
-        if (!resumeProfile || !jdProfile) {
-          return badRequest(
-            "resumeProfile (tailored version) and jdProfile are required"
-          );
+        const parsed = StepInputSchemas["6"].safeParse(rawBody);
+        if (!parsed.success) {
+          return unprocessableEntity("Invalid request body for step 6", parsed.error.issues);
         }
-        console.log("[tailor-run] Step 6: Scoring tailored resume...");
+        const { resumeProfile, jdProfile } = parsed.data;
+        console.log("[tailor-run] Step 6: Scoring tailored resume...", {
+          promptVersion: MATCH_SCORING_PROMPT_VERSION,
+        });
         const tailoredScore = await callGroq(
           MATCH_SCORING_SYSTEM_PROMPT,
           buildMatchScoringUserPrompt(
-            resumeProfile as Record<string, unknown>,
-            jdProfile as Record<string, unknown>
+            resumeProfile as unknown as Record<string, unknown>,
+            jdProfile as unknown as Record<string, unknown>
           ),
-          MatchScoreSchema
+          MatchScoreSchema,
+          { maxTokens: 1024 }
         );
         console.log("[tailor-run] Step 6 complete");
         return ok({ tailoredScore });
       }
 
       default:
-        return NextResponse.json(
-          { error: `Unknown step "${step}". Must be 1–6.` },
-          { status: 400 }
-        );
+        return badRequest(`Unknown step "${step}". Must be 1–6.`);
     }
   } catch (error) {
     console.error(`[tailor-run] Step ${step} failed:`, error);
     const message =
       error instanceof Error ? error.message : "An unexpected error occurred";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json(
+      { error: message, code: "INTERNAL_ERROR" },
+      { status: 500 }
+    );
   }
 }

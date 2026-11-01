@@ -1,6 +1,7 @@
 import React from "react";
 import { Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer";
 import { TailoringRun } from "@/types";
+import { safeText } from "@/lib/pdf-utils";
 
 const styles = StyleSheet.create({
   page: { padding: 30, fontFamily: "Helvetica" },
@@ -25,23 +26,25 @@ const styles = StyleSheet.create({
 export default function ComparisonPDF({ run }: { run: TailoringRun }) {
   const { jdProfile, tailoredResume, originalScore, tailoredScore, gaps } = run;
 
-  // Flatten bullets for comparison
+  // Flatten bullets for comparison — with null-safe access throughout
   const bulletPairs: { original: string; tailored: string; changed: boolean }[] = [];
-  tailoredResume.tailoredExperience.forEach((exp) => {
-    exp.bullets.forEach((b) => {
+  (tailoredResume.tailoredExperience ?? []).forEach((exp) => {
+    (exp.bullets ?? []).forEach((b) => {
+      if (!b) return; // skip null/undefined bullet entries
       // Check if user reverted it (Phase 4 compatibility)
       const isReverted = b.confirmed === false;
-      const finalTailored = isReverted ? b.original : b.tailored;
-      const changed = finalTailored !== b.original;
+      const originalText = safeText(b.original);
+      const finalTailored = isReverted ? originalText : safeText(b.tailored, originalText);
+      const changed = finalTailored !== originalText;
       bulletPairs.push({
-        original: b.original,
+        original: originalText,
         tailored: finalTailored,
-        changed
+        changed,
       });
     });
   });
 
-  const highGaps = gaps.filter(g => g.importance === "high");
+  const highGaps = (gaps ?? []).filter((g) => g && g.importance === "high");
 
   return (
     <Document>
@@ -49,7 +52,9 @@ export default function ComparisonPDF({ run }: { run: TailoringRun }) {
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.title}>RESUME SHAPESHIFTER — COMPARISON REPORT</Text>
-          <Text style={styles.subtitle}>Job: {jdProfile.jobTitle} at {jdProfile.company}</Text>
+          <Text style={styles.subtitle}>
+            Job: {safeText(jdProfile.jobTitle)} at {safeText(jdProfile.company)}
+          </Text>
           <Text style={styles.scoreLine}>
             Score: {originalScore.overallScore} → {tailoredScore.overallScore}
           </Text>
@@ -87,7 +92,7 @@ export default function ComparisonPDF({ run }: { run: TailoringRun }) {
             <Text style={styles.gapTitle}>HIGH-PRIORITY GAPS (Not Addressed)</Text>
             {highGaps.map((gap, idx) => (
               <Text key={idx} style={styles.gapItem}>
-                • {gap.name}: {gap.suggestedAction}
+                • {safeText(gap.name)}: {safeText(gap.suggestedAction)}
               </Text>
             ))}
           </View>
