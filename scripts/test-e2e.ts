@@ -267,7 +267,7 @@ async function main() {
     pdfMod.default;
 
   const pdfDoc = React.createElement(TailoredResumePDF, { run: verifiedRun });
-  const pdfBlob = await pdf(pdfDoc).toBlob();
+  const pdfBlob = await pdf(pdfDoc as any).toBlob();
   console.log(
     `✔ PDF Generation Passed (${Date.now() - pdfStart}ms): Produced valid ${pdfBlob.type} (${pdfBlob.size} bytes). Zero null pointer exceptions.`
   );

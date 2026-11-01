@@ -174,18 +174,46 @@ export async function POST(request: NextRequest) {
           `[tailor-run] Step 4: Rewriting bullet for ${company} — "${bullet.slice(0, 40)}..."`,
           { promptVersion: BULLET_REWRITER_PROMPT_VERSION }
         );
-        const rewrittenBullet = await callGroq(
-          BULLET_REWRITER_SYSTEM_PROMPT,
-          buildBulletRewriterUserPrompt(
-            bullet,
-            company,
-            title,
-            jdProfile as unknown as Record<string, unknown>
-          ),
-          RewrittenBulletSchema,
-          { maxTokens: 1024 }
-        );
-        console.log("[tailor-run] Step 4 bullet complete");
+
+        // Graceful fallback: if the LLM fails this bullet (even after all
+        // withRetry attempts), return HTTP 200 with the original text so the
+        // client pipeline can continue rather than surfacing a 500.
+        let rewrittenBullet: {
+          original: string;
+          tailored: string;
+          changeReason: string;
+          keywordsAddressed: string[];
+          confidence: "high" | "medium" | "low";
+          riskFlag: string;
+        };
+        try {
+          rewrittenBullet = await callGroq(
+            BULLET_REWRITER_SYSTEM_PROMPT,
+            buildBulletRewriterUserPrompt(
+              bullet,
+              company,
+              title,
+              jdProfile as unknown as Record<string, unknown>
+            ),
+            RewrittenBulletSchema,
+            { maxTokens: 2048 }
+          );
+          console.log("[tailor-run] Step 4 bullet complete");
+        } catch (bulletErr) {
+          const errMsg =
+            bulletErr instanceof Error ? bulletErr.message : String(bulletErr);
+          console.warn(
+            `[tailor-run] Step 4 bullet rewrite failed — using fallback. Error: ${errMsg}`
+          );
+          rewrittenBullet = {
+            original: bullet,
+            tailored: bullet,
+            changeReason: "LLM rewrite failed — original preserved",
+            keywordsAddressed: [],
+            confidence: "low",
+            riskFlag: "LLM rewrite failed. Verify manually before submitting.",
+          };
+        }
         return ok({ rewrittenBullet });
       }
 

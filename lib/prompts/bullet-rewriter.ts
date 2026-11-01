@@ -40,8 +40,13 @@ HARD RULES (non-negotiable):
 - NEVER change the fundamental meaning of the bullet.
 - Keep the bullet to 1–2 lines max — tight and scannable.
 - changeReason must name the specific structural change made (not just "improved wording").
-- Output ONLY a raw JSON object. No markdown, no code fences, no explanation.
-- Your response must start with { and end with }.
+
+CRITICAL OUTPUT FORMAT RULES (violation will cause immediate failure):
+- Output raw JSON ONLY. Your entire response must be valid JSON.
+- DO NOT use markdown backticks or code fences (no \`\`\`json, no \`\`\`).
+- DO NOT include any explanatory text, preamble, or commentary before or after the JSON.
+- DO NOT truncate your output — ensure the JSON object is complete and properly closed with }.
+- Your response must start with { and end with }. Nothing before. Nothing after.
 
 OUTPUT JSON SCHEMA:
 {
