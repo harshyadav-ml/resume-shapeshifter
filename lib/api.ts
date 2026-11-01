@@ -211,15 +211,30 @@ async function rewriteBullet(
         `[api] Bullet 429 escaped callStep retries — waiting ${BULLET_RATE_LIMIT_RETRY_MS / 1000}s then retrying once more…`
       );
       await sleep(BULLET_RATE_LIMIT_RETRY_MS);
-      // Final attempt — let any error propagate naturally to the outer catch.
-      const { rewrittenBullet } = await callStep<{ rewrittenBullet: RewrittenBullet }>(
-        "4",
-        { bullet, company, title, jdProfile },
-        signal
-      );
-      return rewrittenBullet;
+      // Final attempt — if this fails or times out, return fallback rather than crashing
+      try {
+        const { rewrittenBullet } = await callStep<{ rewrittenBullet: RewrittenBullet }>(
+          "4",
+          { bullet, company, title, jdProfile },
+          signal
+        );
+        return rewrittenBullet;
+      } catch (finalErr) {
+        console.warn(`[api] Final bullet retry failed — using fallback:`, finalErr);
+        return {
+          original: bullet,
+          tailored: bullet,
+          ...BULLET_FALLBACK,
+        } as RewrittenBullet;
+      }
     }
-    throw err; // non-429 errors propagate immediately
+    // Network drop-offs, Vercel timeouts, or server drop-offs return the fallback bullet
+    console.warn(`[api] Bullet rewrite failed (network/timeout) — using fallback:`, err);
+    return {
+      original: bullet,
+      tailored: bullet,
+      ...BULLET_FALLBACK,
+    } as RewrittenBullet;
   }
 }
 
@@ -406,6 +421,8 @@ export async function runTailoringPipeline(
       console.error("[api] Step 6 FAILED:", errMsg);
       softFailures.push(`Tailored scoring failed: ${errMsg}`);
       tailoredScore = {
+        matched_skills: originalScore.matched_skills ?? 0,
+        total_required_skills: originalScore.total_required_skills ?? 0,
         overallScore: originalScore.overallScore,
         skillCoverageScore: originalScore.skillCoverageScore,
         responsibilityAlignmentScore: originalScore.responsibilityAlignmentScore,

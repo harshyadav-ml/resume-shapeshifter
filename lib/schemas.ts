@@ -166,6 +166,8 @@ export const JobDescriptionProfileSchema = z.object({
 // ── Match Score ──────────────────────────────────────────────────────────────
 
 export const MatchScoreSchema = z.object({
+  matched_skills: z.number().int().min(0),
+  total_required_skills: z.number().int().min(0),
   overallScore: z.number().min(0).max(100),
   skillCoverageScore: z.number().min(0).max(100),
   responsibilityAlignmentScore: z.number().min(0).max(100),
@@ -263,15 +265,27 @@ export const StepInputSchemas = {
     jdProfile: JobDescriptionProfileSchema,
   }),
   /**
-   * Step 4: Rewrite a single bullet —
-   * body: { bullet, company, title, jdProfile }
+   * Step 4: Rewrite a single bullet or batch of bullets —
+   * body: { bullet?: string, bullets?: string[], company: string, title: string, jdProfile }
    */
-  "4": z.object({
-    bullet: z.string().min(1, "bullet must be a non-empty string"),
-    company: z.string().min(1, "company must be a non-empty string"),
-    title: z.string().min(1, "title must be a non-empty string"),
-    jdProfile: JobDescriptionProfileSchema,
-  }),
+  "4": z
+    .object({
+      bullet: z.string().min(1, "bullet must be a non-empty string").optional(),
+      bullets: z
+        .array(z.string().min(1, "each bullet must be a non-empty string"))
+        .optional(),
+      company: z.string().min(1, "company must be a non-empty string"),
+      title: z.string().min(1, "title must be a non-empty string"),
+      jdProfile: JobDescriptionProfileSchema,
+    })
+    .refine(
+      (data) =>
+        data.bullet !== undefined ||
+        (Array.isArray(data.bullets) && data.bullets.length > 0),
+      {
+        message: "Either 'bullet' or 'bullets' array must be provided",
+      }
+    ),
   /** Step 5: Gap analysis — body: { resumeProfile, jdProfile } */
   "5": z.object({
     resumeProfile: ResumeProfileSchema,

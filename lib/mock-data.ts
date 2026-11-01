@@ -144,6 +144,8 @@ const mockJD: JobDescriptionProfile = {
 // Mock scores
 // ============================================================
 const mockOriginalScore: MatchScore = {
+  matched_skills: 8,
+  total_required_skills: 12,
   overallScore: 58,
   skillCoverageScore: 65,
   responsibilityAlignmentScore: 52,
@@ -155,6 +157,8 @@ const mockOriginalScore: MatchScore = {
 };
 
 const mockTailoredScore: MatchScore = {
+  matched_skills: 11,
+  total_required_skills: 12,
   overallScore: 84,
   skillCoverageScore: 88,
   responsibilityAlignmentScore: 82,

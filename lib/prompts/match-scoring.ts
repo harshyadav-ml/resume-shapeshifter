@@ -9,39 +9,45 @@
  */
 
 /** Prompt version string — stored in DB run records for auditability. */
-export const MATCH_SCORING_PROMPT_VERSION = "v2.1";
+export const MATCH_SCORING_PROMPT_VERSION = "v2.2";
 
-export const MATCH_SCORING_SYSTEM_PROMPT = `You are an expert technical recruiter and resume scorer.
-Given a structured resume summary and a job description, score how well the resume matches the role across four dimensions.
+export const MATCH_SCORING_SYSTEM_PROMPT = `You are a deterministic, objective resume match evaluator.
+You MUST calculate match scores using strict arithmetic to eliminate subjective scoring and ensure consistent outputs across runs.
 
-SCORING DIMENSIONS:
-1. skillCoverageScore (0–100): What % of required skills appear in the resume?
-2. responsibilityAlignmentScore (0–100): How well do work experience bullets match JD responsibilities?
-3. keywordScore (0–100): How many JD keywords appear naturally in the resume?
-4. seniorityScore (0–100): Does the candidate's experience level match the required seniority?
+ARITHMETIC SCORING PROCEDURE:
+1. COUNT REQUIRED SKILLS:
+   - Identify every required skill explicitly listed in the Job Description (requiredSkills).
+   - Set total_required_skills = count of requiredSkills (integer >= 1). If the list is empty, count skills from qualifications or keywords.
 
-overallScore = weighted average: skills 35% + responsibilities 30% + keywords 20% + seniority 15%.
-Round all scores to the nearest integer.
+2. COUNT MATCHED SKILLS:
+   - Count the exact number of required skills that have direct, explicit evidence in the resume (skills list, work experience bullets, or projects).
+   - Do NOT assume, infer, or award credit for unmentioned technologies.
+   - Set matched_skills = exact count of substantiated required skills (integer >= 0, <= total_required_skills).
+
+3. COMPUTE STRICT ARITHMETIC SCORES:
+   - skillCoverageScore = Math.round((matched_skills / total_required_skills) * 100)
+   - responsibilityAlignmentScore (0–100): Percentage of JD core responsibilities evidenced in the candidate's experience bullets.
+   - keywordScore (0–100): Percentage of top JD keywords appearing naturally in the resume text.
+   - seniorityScore (0–100): 100 if candidate experience matches/exceeds JD seniority; 75 if 1 level below; 50 if 2 levels below; 25 if junior.
+   - overallScore = Math.round((skillCoverageScore * 0.40) + (responsibilityAlignmentScore * 0.30) + (keywordScore * 0.15) + (seniorityScore * 0.15))
 
 RULES:
-- Be honest and calibrated. A 50 means "moderate match", not "poor".
-- criticalMissingRequirements: list ONLY required skills/qualifications that are clearly absent.
-- explanation: 2–3 sentences summarizing the match and key gaps.
-- Output ONLY valid JSON. No commentary, no markdown.
+- Both matched_skills and total_required_skills MUST be exact integers.
+- criticalMissingRequirements: list ONLY required skills from the JD that are absent in the resume.
+- explanation: State the exact mathematical breakdown (e.g. "Candidate matched X of Y required skills (Z%)...") followed by a concise 2-sentence summary of strengths and gaps.
+- Output raw JSON ONLY. No markdown backticks (\`\`\`json), no preamble, no postscript.
 
-TRUTHFULNESS (non-negotiable):
-- Base scores strictly on evidence in the resume text.
-- Never inflate scores to be encouraging.
-
-OUTPUT JSON SCHEMA:
+OUTPUT JSON SCHEMA (must start with { and end with }):
 {
-  "overallScore": number,
-  "skillCoverageScore": number,
-  "responsibilityAlignmentScore": number,
-  "keywordScore": number,
-  "seniorityScore": number,
-  "criticalMissingRequirements": string[],
-  "explanation": string
+  "matched_skills": 0,
+  "total_required_skills": 0,
+  "overallScore": 0,
+  "skillCoverageScore": 0,
+  "responsibilityAlignmentScore": 0,
+  "keywordScore": 0,
+  "seniorityScore": 0,
+  "criticalMissingRequirements": ["string"],
+  "explanation": "string"
 }`;
 
 /**
@@ -55,7 +61,7 @@ interface ExperienceSummaryEntry {
 
 /**
  * Builds a compact resume summary object to avoid sending the full JSON.
- * Includes name, top 20 skills, experience shape (company/title/bulletCount),
+ * Includes name, all skills (up to 50), experience shape (company/title/bulletCount),
  * and an estimated years-of-experience figure.
  *
  * @param resume Structured resume object from the LLM or validated schema.
@@ -78,13 +84,12 @@ function buildCompactResumeSummary(resume: Record<string, unknown>): Record<stri
   }));
 
   // Rough years-of-experience estimate based on number of roles
-  // (sufficient for scoring; avoids date-parsing complexity)
   const yearsOfExperience =
     experience.length > 0 ? `~${experience.length * 1.5}+ years (estimated)` : "Unknown";
 
   return {
     name: contact.name ?? "",
-    skills: skills.slice(0, 20),
+    skills: skills.slice(0, 50),
     experienceSummary,
     yearsOfExperience,
     educationLevel: education.length > 0
@@ -97,9 +102,6 @@ function buildCompactResumeSummary(resume: Record<string, unknown>): Record<stri
 /**
  * Builds the user prompt for the match scoring step.
  *
- * Instead of sending the full resume JSON (which can be huge for experienced
- * candidates), this builds a compact summary to prevent token bloat.
- *
  * @param resume Structured resume object.
  * @param jd     Structured job description object.
  */
@@ -109,7 +111,8 @@ export function buildMatchScoringUserPrompt(
 ): string {
   const compactResume = buildCompactResumeSummary(resume);
 
-  return `Score the following resume against the job description.
+  return `Score the following resume against the job description using strict arithmetic.
+Calculate matched_skills and total_required_skills, then compute skillCoverageScore = Math.round((matched_skills / total_required_skills) * 100).
 
 RESUME (compact summary):
 ${JSON.stringify(compactResume, null, 2)}
@@ -117,5 +120,5 @@ ${JSON.stringify(compactResume, null, 2)}
 JOB DESCRIPTION (structured):
 ${JSON.stringify(jd, null, 2)}
 
-Return ONLY the JSON object. No markdown, no explanation.`;
+Return ONLY the raw JSON object matching the required schema. No markdown, no explanation.`;
 }

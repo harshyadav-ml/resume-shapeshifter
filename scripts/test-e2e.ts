@@ -101,6 +101,8 @@ async function main() {
   console.log(`[Input] Base Resume: ${resumePath} (${baseResumeText.length} chars)`);
   console.log(`[Input] Target JD: ${jdPath} (${baseJdText.length} chars)\n`);
 
+  const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
   // ── Step 1: Parse Base Resume ───────────────────────────────────────────────
   console.log("▶ Step 1: Parsing Base Resume through Groq...");
   const step1Start = Date.now();
@@ -113,6 +115,8 @@ async function main() {
   );
   console.log(`  Candidate: ${resumeProfile.contact.name} (${resumeProfile.contact.email})`);
 
+  await delay(2500);
+
   // ── Step 2: Parse Job Description ───────────────────────────────────────────
   console.log("\n▶ Step 2: Parsing Job Description through Groq...");
   const step2Start = Date.now();
@@ -124,6 +128,8 @@ async function main() {
     `✔ Step 2 Passed (${Date.now() - step2Start}ms): Target Role: ${jdProfile.jobTitle} at ${jdProfile.company}`
   );
   console.log(`  Required Skills: ${jdProfile.requiredSkills.slice(0, 5).join(", ")}...`);
+
+  await delay(2500);
 
   // ── Step 3: Match Scoring (Original) ────────────────────────────────────────
   console.log("\n▶ Step 3: Scoring Original Resume against Job Description...");

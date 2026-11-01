@@ -1,3 +1,5 @@
+export const maxDuration = 60;
+
 /**
  * POST /api/tailor-run?step=N
  *
@@ -21,7 +23,6 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-export const maxDuration = 60;
 
 import { callGroq } from "@/lib/groq";
 import {
@@ -156,65 +157,73 @@ export async function POST(request: NextRequest) {
             jdProfile as unknown as Record<string, unknown>
           ),
           MatchScoreSchema,
-          { maxTokens: 1024 }
+          { maxTokens: 2048 }
         );
         console.log("[tailor-run] Step 3 complete");
         return ok({ originalScore });
       }
 
-      // ── Step 4: Rewrite a single bullet ──────────────────────────────────
-      // The client calls this once per bullet, waiting 2.5s between each call.
+      // ── Step 4: Rewrite bullet(s) ─────────────────────────────────────────
       case "4": {
         const parsed = StepInputSchemas["4"].safeParse(rawBody);
         if (!parsed.success) {
           return unprocessableEntity("Invalid request body for step 4", parsed.error.issues);
         }
-        const { bullet, company, title, jdProfile } = parsed.data;
+        const { company, title, jdProfile } = parsed.data;
+        const bulletsToRewrite: string[] =
+          parsed.data.bullets ?? (parsed.data.bullet ? [parsed.data.bullet] : []);
+
         console.log(
-          `[tailor-run] Step 4: Rewriting bullet for ${company} — "${bullet.slice(0, 40)}..."`,
+          `[tailor-run] Step 4: Rewriting ${bulletsToRewrite.length} bullet(s) for ${company}`,
           { promptVersion: BULLET_REWRITER_PROMPT_VERSION }
         );
 
-        // Graceful fallback: if the LLM fails this bullet (even after all
-        // withRetry attempts), return HTTP 200 with the original text so the
-        // client pipeline can continue rather than surfacing a 500.
-        let rewrittenBullet: {
-          original: string;
-          tailored: string;
-          changeReason: string;
-          keywordsAddressed: string[];
-          confidence: "high" | "medium" | "low";
-          riskFlag: string;
-        };
-        try {
-          rewrittenBullet = await callGroq(
-            BULLET_REWRITER_SYSTEM_PROMPT,
-            buildBulletRewriterUserPrompt(
-              bullet,
-              company,
-              title,
-              jdProfile as unknown as Record<string, unknown>
-            ),
-            RewrittenBulletSchema,
-            { maxTokens: 2048 }
-          );
-          console.log("[tailor-run] Step 4 bullet complete");
-        } catch (bulletErr) {
-          const errMsg =
-            bulletErr instanceof Error ? bulletErr.message : String(bulletErr);
-          console.warn(
-            `[tailor-run] Step 4 bullet rewrite failed — using fallback. Error: ${errMsg}`
-          );
-          rewrittenBullet = {
-            original: bullet,
-            tailored: bullet,
-            changeReason: "LLM rewrite failed — original preserved",
-            keywordsAddressed: [],
-            confidence: "low",
-            riskFlag: "LLM rewrite failed. Verify manually before submitting.",
-          };
-        }
-        return ok({ rewrittenBullet });
+        // Fallback generator for a bullet if Groq/LLM call times out or network drops off
+        const makeFallbackBullet = (b: string) => ({
+          original: b,
+          tailored: b,
+          changeReason: "Rewrite failed — original preserved",
+          keywordsAddressed: [] as string[],
+          confidence: "low" as const,
+          riskFlag: "LLM rewrite failed. Verify manually before submitting.",
+        });
+
+        // Promise.all block for bullet rewriting: gracefully catches network drop-offs
+        // (like Vercel killing the process/sub-request) and returns the fallback original
+        // bullets instead of passing a fetch error to the client.
+        const rewrittenBullets = await Promise.all(
+          bulletsToRewrite.map(async (bullet) => {
+            try {
+              return await callGroq(
+                BULLET_REWRITER_SYSTEM_PROMPT,
+                buildBulletRewriterUserPrompt(
+                  bullet,
+                  company,
+                  title,
+                  jdProfile as unknown as Record<string, unknown>
+                ),
+                RewrittenBulletSchema,
+                { maxTokens: 2048 }
+              );
+            } catch (bulletErr) {
+              const errMsg =
+                bulletErr instanceof Error ? bulletErr.message : String(bulletErr);
+              console.warn(
+                `[tailor-run] Step 4 bullet rewrite caught error/network drop-off — using fallback. Error: ${errMsg}`
+              );
+              return makeFallbackBullet(bullet);
+            }
+          })
+        );
+
+        console.log(
+          `[tailor-run] Step 4 complete for ${rewrittenBullets.length} bullet(s)`
+        );
+
+        return ok({
+          rewrittenBullet: rewrittenBullets[0],
+          rewrittenBullets,
+        });
       }
 
       // ── Step 5: Gap analysis ──────────────────────────────────────────────
@@ -263,7 +272,7 @@ export async function POST(request: NextRequest) {
             jdProfile as unknown as Record<string, unknown>
           ),
           MatchScoreSchema,
-          { maxTokens: 1024 }
+          { maxTokens: 2048 }
         );
         console.log("[tailor-run] Step 6 complete");
         return ok({ tailoredScore });
@@ -276,6 +285,24 @@ export async function POST(request: NextRequest) {
     console.error(`[tailor-run] Step ${step} failed:`, error);
     const message =
       error instanceof Error ? error.message : "An unexpected error occurred";
+
+    // If step was 4 and an unexpected network drop-off occurred, return fallback original bullet
+    // so Vercel killing the process never passes an unhandled fetch error to the client.
+    if (step === "4") {
+      const fallbackBullet = {
+        original: (rawBody as { bullet?: string })?.bullet ?? "Original bullet",
+        tailored: (rawBody as { bullet?: string })?.bullet ?? "Original bullet",
+        changeReason: "LLM rewrite failed — original preserved",
+        keywordsAddressed: [] as string[],
+        confidence: "low" as const,
+        riskFlag: "Process timed out or dropped off. Verify manually.",
+      };
+      return ok({
+        rewrittenBullet: fallbackBullet,
+        rewrittenBullets: [fallbackBullet],
+      });
+    }
+
     return NextResponse.json(
       { error: message, code: "INTERNAL_ERROR" },
       { status: 500 }

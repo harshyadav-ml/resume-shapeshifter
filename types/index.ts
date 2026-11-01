@@ -73,6 +73,8 @@ export interface JobDescriptionProfile {
 // ----------------------------------------------------------
 
 export interface MatchScore {
+  matched_skills: number;
+  total_required_skills: number;
   overallScore: number; // 0–100
   skillCoverageScore: number;
   responsibilityAlignmentScore: number;

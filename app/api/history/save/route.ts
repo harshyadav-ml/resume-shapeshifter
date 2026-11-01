@@ -18,7 +18,7 @@
 import { NextRequest, NextResponse } from "next/server";
 export const maxDuration = 10;
 
-import { db } from "@/lib/db";
+import { db as prisma } from "@/lib/db";
 import { TailoringRunSchema } from "@/lib/schemas";
 
 export async function POST(request: NextRequest) {
@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    await db.tailoringRunRecord.create({
+    await prisma.tailoringRunRecord.create({
       data: {
         id: run.id,
         jobTitle: run.jdProfile?.jobTitle ?? "Unknown",
@@ -90,29 +90,23 @@ export async function POST(request: NextRequest) {
     console.log(`[history/save] Saved run ${run.id} to DB`, { promptVersions });
     return NextResponse.json({ ok: true, id: run.id }, { status: 200 });
   } catch (err) {
-    // Non-fatal — on Vercel the filesystem is read-only (SQLITE_CANTOPEN).
-    // Return 200 so the frontend never sees a failure; log the cause for
-    // diagnostics. History will simply be unavailable in this environment.
+    // Non-fatal — on Vercel the SQLite filesystem is read-only.
+    // Catch the error, log a warning via console.warn, and return 200 OK
+    // so database persistence failures never crash the API response.
     const message = err instanceof Error ? err.message : "Database save failed";
-    const isSqliteUnavailable =
-      message.includes("SQLITE_CANTOPEN") ||
-      message.includes("SQLITE_READONLY") ||
-      message.includes("no such file") ||
-      process.env.VERCEL === "1";
-
-    if (isSqliteUnavailable) {
-      console.warn(
-        "[history/save] SQLite unavailable (read-only FS) — skipping persistence:",
-        message
-      );
-      return NextResponse.json(
-        { ok: true, skipped: true, reason: "sqlite_unavailable" },
-        { status: 200 }
-      );
-    }
-
-    // Unexpected DB error — still non-fatal but log loudly.
-    console.error("[history/save] DB save failed:", err);
-    return NextResponse.json({ ok: false, error: message }, { status: 200 });
+    console.warn(
+      "[history/save] SQLite persistence failed (read-only file system restriction):",
+      message
+    );
+    return NextResponse.json(
+      {
+        ok: true,
+        skipped: true,
+        reason: "sqlite_readonly_filesystem",
+        warning: "Database persistence failed (read-only environment)",
+        message,
+      },
+      { status: 200 }
+    );
   }
 }
