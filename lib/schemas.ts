@@ -309,3 +309,4 @@ export type ZodResumeGap = z.infer<typeof ResumeGapSchema>;
 export type ZodGapAnalysisResult = z.infer<typeof GapAnalysisResultSchema>;
 export type ZodTailoringRun = z.infer<typeof TailoringRunSchema>;
 export type ZodResumeIngestion = z.infer<typeof ResumeIngestionSchema>;
+
