@@ -144,4 +144,3 @@ export default function JDSummary({ profile, className }: JDSummaryProps) {
     </div>
   );
 }
-
