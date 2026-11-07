@@ -1,16 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { MatchScore } from "@/types";
 import { cn } from "@/lib/utils";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 
-/* ── Props (UNCHANGED) ───────────────────────────────────────── */
+/* ── Props ───────────────────────────────────────────────────── */
 interface ScoreCardProps {
   originalScore: MatchScore;
   tailoredScore?: MatchScore;
   className?: string;
   showBoth?: boolean;
+  tailoredLabel?: string;
 }
 
 /* ── Constants ───────────────────────────────────────────────── */
@@ -40,21 +41,23 @@ function scoreColor(s: number): { stroke: string; text: string; bg: string; glow
 }
 
 /* ── Animated counter hook ────────────────────────────────────── */
-function useCounter(target: number, duration = 1300) {
+function useCounter(target: number, duration = 1000) {
   const [value, setValue] = useState(0);
+  const prevTargetRef = useRef(0);
   const [started, setStarted] = useState(false);
 
   useEffect(() => {
-    const t = setTimeout(() => setStarted(true), 120);
+    const t = setTimeout(() => setStarted(true), 100);
     return () => clearTimeout(t);
   }, []);
 
   useEffect(() => {
     if (!started) return;
-    let raf: number;
+    const from = prevTargetRef.current;
+    prevTargetRef.current = target;
     const start = performance.now();
-    const from = 0;
 
+    let raf: number;
     function tick(now: number) {
       const progress = Math.min((now - start) / duration, 1);
       // Ease-out cubic
@@ -224,6 +227,7 @@ export default function ScoreCard({
   tailoredScore,
   className,
   showBoth = false,
+  tailoredLabel = "Tailored",
 }: ScoreCardProps) {
   const improvement = tailoredScore
     ? tailoredScore.overallScore - originalScore.overallScore
@@ -273,7 +277,7 @@ export default function ScoreCard({
                   <path d="M0 8 H40 M33 2 L42 8 L33 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </div>
-              <GaugeRing score={tailoredScore.overallScore} label="Tailored" size={192} />
+              <GaugeRing score={tailoredScore.overallScore} label={tailoredLabel} size={192} />
             </>
           )}
         </div>

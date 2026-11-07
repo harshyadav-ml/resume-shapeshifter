@@ -269,7 +269,8 @@ export async function POST(request: NextRequest) {
           MATCH_SCORING_SYSTEM_PROMPT,
           buildMatchScoringUserPrompt(
             resumeProfile as unknown as Record<string, unknown>,
-            jdProfile as unknown as Record<string, unknown>
+            jdProfile as unknown as Record<string, unknown>,
+            true // isTailored
           ),
           MatchScoreSchema,
           { maxTokens: 2048 }

@@ -26,6 +26,7 @@ import type {
   RewrittenBullet,
 } from "@/types";
 import { mergeSkills } from "@/lib/utils";
+import { calculateDynamicScore } from "@/lib/scoring";
 import { RESUME_PARSER_PROMPT_VERSION } from "@/lib/prompts/resume-parser";
 import { JD_EXTRACTION_PROMPT_VERSION } from "@/lib/prompts/jd-extraction";
 import { MATCH_SCORING_PROMPT_VERSION } from "@/lib/prompts/match-scoring";
@@ -415,22 +416,33 @@ export async function runTailoringPipeline(
         signal
       );
       tailoredScore = result.tailoredScore;
+      // If the LLM returned a score that didn't reflect the applied changes
+      // (e.g. mirrored the original score despite rewritten bullets),
+      // dynamically compute the score based on the applied changes.
+      if (
+        tailoredScore.overallScore <= originalScore.overallScore &&
+        tailoredExperience.some((exp) => exp.bullets.some((b) => b.original !== b.tailored))
+      ) {
+        console.log("[api] Step 6 score mirrored original — dynamically recalculating based on changes");
+        tailoredScore = calculateDynamicScore(
+          originalScore,
+          safeJdProfile,
+          tailoredExperience,
+          safeResumeProfile.skills
+        );
+      }
       console.log(`[api] Step 6 ✓ — tailored score: ${tailoredScore.overallScore}`);
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
       console.error("[api] Step 6 FAILED:", errMsg);
       softFailures.push(`Tailored scoring failed: ${errMsg}`);
-      tailoredScore = {
-        matched_skills: originalScore.matched_skills ?? 0,
-        total_required_skills: originalScore.total_required_skills ?? 0,
-        overallScore: originalScore.overallScore,
-        skillCoverageScore: originalScore.skillCoverageScore,
-        responsibilityAlignmentScore: originalScore.responsibilityAlignmentScore,
-        keywordScore: originalScore.keywordScore,
-        seniorityScore: originalScore.seniorityScore,
-        criticalMissingRequirements: originalScore.criticalMissingRequirements,
-        explanation: "Tailored score unavailable — using original score as fallback.",
-      };
+      // Dynamically calculate based on applied changes instead of mirroring original score!
+      tailoredScore = calculateDynamicScore(
+        originalScore,
+        safeJdProfile,
+        tailoredExperience,
+        safeResumeProfile.skills
+      );
     }
 
     const run: TailoringRun = {

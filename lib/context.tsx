@@ -6,6 +6,7 @@ import {
   AppAction,
   TailoringRun,
 } from "@/types";
+import { calculateDynamicScore } from "@/lib/scoring";
 
 // ----------------------------------------------------------
 // Initial State
@@ -41,7 +42,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
       // Support both bare TailoringRun and { run, status, errors } pipeline result
       const payload = action.payload;
       const isPipelineResult = "run" in payload && payload.run !== undefined;
-      const run: TailoringRun = isPipelineResult
+      let run: TailoringRun = isPipelineResult
         ? (payload as { run: TailoringRun }).run
         : (payload as TailoringRun);
       const runStatus = isPipelineResult
@@ -50,6 +51,28 @@ function appReducer(state: AppState, action: AppAction): AppState {
       const runErrors = isPipelineResult
         ? (payload as { errors?: string[] }).errors
         : undefined;
+
+      // Ensure tailoredScore reflects the applied changes rather than mirroring originalScore
+      if (
+        run.originalScore &&
+        run.tailoredScore &&
+        run.tailoredScore.overallScore <= run.originalScore.overallScore &&
+        run.tailoredResume?.tailoredExperience?.some((exp) =>
+          exp.bullets.some((b) => b.original !== b.tailored)
+        )
+      ) {
+        const dynamicTailoredScore = calculateDynamicScore(
+          run.originalScore,
+          run.jdProfile,
+          run.tailoredResume.tailoredExperience,
+          run.resumeProfile?.skills || []
+        );
+        run = {
+          ...run,
+          tailoredScore: dynamicTailoredScore,
+        };
+      }
+
       return {
         ...state,
         tailoringRun: run,
@@ -84,9 +107,25 @@ function appReducer(state: AppState, action: AppAction): AppState {
         ...state.tailoredResume,
         tailoredExperience: updatedExperience,
       };
-      const updatedRun = state.tailoringRun
-        ? { ...state.tailoringRun, tailoredResume: updatedTailored }
+
+      // Dynamically recalculate tailoredScore based on the applied/confirmed changes
+      const updatedScore = state.tailoringRun
+        ? calculateDynamicScore(
+            state.tailoringRun.originalScore,
+            state.tailoringRun.jdProfile,
+            updatedExperience,
+            state.tailoringRun.resumeProfile.skills
+          )
         : null;
+
+      const updatedRun = state.tailoringRun
+        ? {
+            ...state.tailoringRun,
+            tailoredResume: updatedTailored,
+            ...(updatedScore ? { tailoredScore: updatedScore } : {}),
+          }
+        : null;
+
       return {
         ...state,
         tailoredResume: updatedTailored,
@@ -112,9 +151,25 @@ function appReducer(state: AppState, action: AppAction): AppState {
         ...state.tailoredResume,
         tailoredExperience: updatedExperience,
       };
-      const updatedRun = state.tailoringRun
-        ? { ...state.tailoringRun, tailoredResume: updatedTailored }
+
+      // Dynamically recalculate tailoredScore based on the applied/reverted changes
+      const updatedScore = state.tailoringRun
+        ? calculateDynamicScore(
+            state.tailoringRun.originalScore,
+            state.tailoringRun.jdProfile,
+            updatedExperience,
+            state.tailoringRun.resumeProfile.skills
+          )
         : null;
+
+      const updatedRun = state.tailoringRun
+        ? {
+            ...state.tailoringRun,
+            tailoredResume: updatedTailored,
+            ...(updatedScore ? { tailoredScore: updatedScore } : {}),
+          }
+        : null;
+
       return {
         ...state,
         tailoredResume: updatedTailored,

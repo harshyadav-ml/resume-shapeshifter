@@ -56,12 +56,13 @@ OUTPUT JSON SCHEMA (must start with { and end with }):
 interface ExperienceSummaryEntry {
   company: string;
   title: string;
-  bulletCount: number;
+  bullets: string[];
 }
 
 /**
  * Builds a compact resume summary object to avoid sending the full JSON.
- * Includes name, all skills (up to 50), experience shape (company/title/bulletCount),
+ * Includes name, all skills (up to 50), experience shape with actual bullets
+ * (so the LLM can evaluate tailored bullets and keyword injection),
  * and an estimated years-of-experience figure.
  *
  * @param resume Structured resume object from the LLM or validated schema.
@@ -76,12 +77,26 @@ function buildCompactResumeSummary(resume: Record<string, unknown>): Record<stri
     ? (resume.education as Array<Record<string, unknown>>)
     : [];
 
-  // Build compact experience summary
-  const experienceSummary: ExperienceSummaryEntry[] = experience.map((e) => ({
-    company: typeof e.company === "string" ? e.company : "",
-    title: typeof e.title === "string" ? e.title : "",
-    bulletCount: Array.isArray(e.bullets) ? e.bullets.length : 0,
-  }));
+  // Build experience summary including actual bullet texts (up to 6 per role)
+  const experienceSummary: ExperienceSummaryEntry[] = experience.map((e) => {
+    const rawBullets = Array.isArray(e.bullets) ? e.bullets : [];
+    const bullets = rawBullets
+      .map((b) =>
+        typeof b === "string"
+          ? b
+          : (b as { tailored?: string; original?: string })?.tailored ||
+            (b as { original?: string })?.original ||
+            ""
+      )
+      .filter(Boolean)
+      .slice(0, 6);
+
+    return {
+      company: typeof e.company === "string" ? e.company : "",
+      title: typeof e.title === "string" ? e.title : "",
+      bullets,
+    };
+  });
 
   // Rough years-of-experience estimate based on number of roles
   const yearsOfExperience =
@@ -104,16 +119,18 @@ function buildCompactResumeSummary(resume: Record<string, unknown>): Record<stri
  *
  * @param resume Structured resume object.
  * @param jd     Structured job description object.
+ * @param isTailored Whether this is the tailored version of the resume.
  */
 export function buildMatchScoringUserPrompt(
   resume: Record<string, unknown>,
-  jd: Record<string, unknown>
+  jd: Record<string, unknown>,
+  isTailored = false
 ): string {
   const compactResume = buildCompactResumeSummary(resume);
 
   return `Score the following resume against the job description using strict arithmetic.
 Calculate matched_skills and total_required_skills, then compute skillCoverageScore = Math.round((matched_skills / total_required_skills) * 100).
-
+${isTailored ? "\nNOTE: This is the TAILORED resume. Experience bullets have been optimized to incorporate JD keywords, action verbs, and alignment with required responsibilities. Evaluate how the tailored bullets demonstrate required skills and alignment.\n" : ""}
 RESUME (compact summary):
 ${JSON.stringify(compactResume, null, 2)}
 
