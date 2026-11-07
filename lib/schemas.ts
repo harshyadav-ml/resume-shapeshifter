@@ -27,17 +27,31 @@ export const ContactInfoSchema = z.object({
 });
 
 export const ExperienceEntrySchema = z.object({
-  /** Company name must be non-empty. */
-  company: z.string().min(1),
-  /** Job title must be non-empty. */
-  title: z.string().min(1),
-  startDate: z.string(),
-  endDate: z.string(),
+  /**
+   * Company name — coerced to a non-empty string.
+   * If the LLM returns "" (e.g. for independent projects or training roles),
+   * .catch() silently substitutes a sensible default rather than failing
+   * validation and burning a costly retry.
+   */
+  company: z
+    .string()
+    .transform((val) => val.trim() || "Independent / Self-Directed")
+    .catch("Independent / Self-Directed"),
+  /**
+   * Job title — same defensive coercion as company.
+   */
+  title: z
+    .string()
+    .transform((val) => val.trim() || "Independent Project")
+    .catch("Independent Project"),
+  startDate: z.string().catch(""),
+  endDate: z.string().catch(""),
   /**
    * Each bullet must be non-empty and at most 500 chars.
    * Array capped at 15 bullets per entry to prevent runaway token consumption.
+   * .catch([]) ensures a malformed bullets array never fails the whole entry.
    */
-  bullets: z.array(z.string().min(1).max(500)).max(15).default([]),
+  bullets: z.array(z.string().min(1).max(500)).max(15).default([]).catch([]),
 });
 
 export const ProjectEntrySchema = z.object({

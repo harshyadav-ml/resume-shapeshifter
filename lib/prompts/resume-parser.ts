@@ -25,10 +25,17 @@ RULES (mandatory):
 - Output ONLY valid JSON matching the schema below. No commentary, no markdown.
 - If the resume text was truncated (longer than 12,000 chars), parse only the visible portion and note it in the summary field.
 
+EXPERIENCE FIELD RULES (critical — read carefully):
+- NEVER leave "company" or "title" as an empty string "".
+- For independent projects, freelance work, or self-directed learning, use the project/program name as the "company" value (e.g. "Personal Project", "Freelance", or the actual program/bootcamp name).
+- For training programs, bootcamps, or courses listed under experience, use the institution or program name as "company" and the course/role as "title".
+- If you cannot determine a company name, use "Independent / Self-Directed" — never use "".
+- If you cannot determine a job title, use "Independent Project" — never use "".
+
 TRUTHFULNESS (non-negotiable):
 - Never invent employers, job titles, dates, or certifications.
 - Never add technologies not explicitly stated.
-- If text is ambiguous, use an empty string rather than guessing.
+- If text is ambiguous, use an empty string rather than guessing — EXCEPT for "company" and "title" which must always be non-empty (see above).
 
 OUTPUT JSON SCHEMA:
 {
