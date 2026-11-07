@@ -61,9 +61,10 @@ interface ExperienceSummaryEntry {
 
 /**
  * Builds a compact resume summary object to avoid sending the full JSON.
- * Includes name, all skills (up to 50), experience shape with actual bullets
- * (so the LLM can evaluate tailored bullets and keyword injection),
- * and an estimated years-of-experience figure.
+ * Aggressively truncated to stay within Groq Free Tier TPM limits:
+ * - Maximum of first 3 bullets per job
+ * - Each bullet truncated to maximum 150 characters
+ * - Compact skills and summary
  *
  * @param resume Structured resume object from the LLM or validated schema.
  */
@@ -77,19 +78,21 @@ function buildCompactResumeSummary(resume: Record<string, unknown>): Record<stri
     ? (resume.education as Array<Record<string, unknown>>)
     : [];
 
-  // Build experience summary including actual bullet texts (up to 6 per role)
+  // Build experience summary: max 3 bullets per job, max 150 chars per bullet
   const experienceSummary: ExperienceSummaryEntry[] = experience.map((e) => {
     const rawBullets = Array.isArray(e.bullets) ? e.bullets : [];
     const bullets = rawBullets
-      .map((b) =>
-        typeof b === "string"
-          ? b
-          : (b as { tailored?: string; original?: string })?.tailored ||
-            (b as { original?: string })?.original ||
-            ""
-      )
+      .map((b) => {
+        const text =
+          typeof b === "string"
+            ? b
+            : (b as { tailored?: string; original?: string })?.tailored ||
+              (b as { original?: string })?.original ||
+              "";
+        return text.trim().slice(0, 150);
+      })
       .filter(Boolean)
-      .slice(0, 6);
+      .slice(0, 3);
 
     return {
       company: typeof e.company === "string" ? e.company : "",
@@ -104,13 +107,36 @@ function buildCompactResumeSummary(resume: Record<string, unknown>): Record<stri
 
   return {
     name: contact.name ?? "",
-    skills: skills.slice(0, 50),
+    skills: skills.slice(0, 25),
     experienceSummary,
     yearsOfExperience,
     educationLevel: education.length > 0
       ? (education[0] as Record<string, string>)?.degree ?? ""
       : "",
-    summary: typeof resume.summary === "string" ? resume.summary.slice(0, 300) : "",
+    summary: typeof resume.summary === "string" ? resume.summary.slice(0, 180) : "",
+  };
+}
+
+/**
+ * Builds a compact JD summary object to prevent token bloat.
+ */
+function buildCompactJdSummary(jd: Record<string, unknown>): Record<string, unknown> {
+  return {
+    jobTitle: jd.jobTitle,
+    company: jd.company,
+    seniorityLevel: jd.seniorityLevel,
+    requiredSkills: Array.isArray(jd.requiredSkills)
+      ? (jd.requiredSkills as string[]).slice(0, 12)
+      : [],
+    preferredSkills: Array.isArray(jd.preferredSkills)
+      ? (jd.preferredSkills as string[]).slice(0, 6)
+      : [],
+    responsibilities: Array.isArray(jd.responsibilities)
+      ? (jd.responsibilities as string[]).slice(0, 5).map((r) => r.slice(0, 150))
+      : [],
+    keywords: Array.isArray(jd.keywords)
+      ? (jd.keywords as string[]).slice(0, 10)
+      : [],
   };
 }
 
@@ -127,6 +153,7 @@ export function buildMatchScoringUserPrompt(
   isTailored = false
 ): string {
   const compactResume = buildCompactResumeSummary(resume);
+  const compactJd = buildCompactJdSummary(jd);
 
   return `Score the following resume against the job description using strict arithmetic.
 Calculate matched_skills and total_required_skills, then compute skillCoverageScore = Math.round((matched_skills / total_required_skills) * 100).
@@ -135,7 +162,7 @@ RESUME (compact summary):
 ${JSON.stringify(compactResume, null, 2)}
 
 JOB DESCRIPTION (structured):
-${JSON.stringify(jd, null, 2)}
+${JSON.stringify(compactJd, null, 2)}
 
 Return ONLY the raw JSON object matching the required schema. No markdown, no explanation.`;
 }

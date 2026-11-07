@@ -58,7 +58,7 @@ import {
   buildGapAnalysisUserPrompt,
   GAP_ANALYSIS_PROMPT_VERSION,
 } from "@/lib/prompts/gap-analysis";
-import { ZodError } from "zod";
+import { z, ZodError } from "zod";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -113,7 +113,7 @@ export async function POST(request: NextRequest) {
           RESUME_PARSER_SYSTEM_PROMPT,
           buildResumeParserUserPrompt(resumeText),
           ResumeProfileSchema,
-          { maxTokens: 2048 }
+          { maxTokens: 2500 }
         );
         console.log("[tailor-run] Step 1 complete");
         return ok({ resumeProfile });
@@ -133,7 +133,7 @@ export async function POST(request: NextRequest) {
           JD_EXTRACTION_SYSTEM_PROMPT,
           buildJDExtractionUserPrompt(jdText),
           JobDescriptionProfileSchema,
-          { maxTokens: 2048 }
+          { maxTokens: 2500 }
         );
         console.log("[tailor-run] Step 2 complete");
         return ok({ jdProfile });
@@ -150,15 +150,51 @@ export async function POST(request: NextRequest) {
         console.log("[tailor-run] Step 3: Scoring original resume...", {
           promptVersion: MATCH_SCORING_PROMPT_VERSION,
         });
-        const originalScore = await callGroq(
-          MATCH_SCORING_SYSTEM_PROMPT,
-          buildMatchScoringUserPrompt(
-            resumeProfile as unknown as Record<string, unknown>,
-            jdProfile as unknown as Record<string, unknown>
-          ),
-          MatchScoreSchema,
-          { maxTokens: 2048 }
-        );
+        const fastModel = process.env.GROQ_FAST_MODEL ?? "openai/gpt-oss-20b";
+        let originalScore: z.infer<typeof MatchScoreSchema>;
+        try {
+          originalScore = await callGroq(
+            MATCH_SCORING_SYSTEM_PROMPT,
+            buildMatchScoringUserPrompt(
+              resumeProfile as unknown as Record<string, unknown>,
+              jdProfile as unknown as Record<string, unknown>
+            ),
+            MatchScoreSchema,
+            {
+              model: fastModel,
+              temperature: 0.1,
+              maxTokens: 2500,
+            }
+          );
+        } catch (scoringErr) {
+          console.warn(
+            "[tailor-run] Step 3 LLM scoring failed — computing deterministic baseline score:",
+            scoringErr
+          );
+          const reqSkills = jdProfile.requiredSkills || [];
+          const totalReq = Math.max(reqSkills.length, 1);
+          const resumeSkillsLower = new Set(
+            resumeProfile.skills.map((s) => s.toLowerCase())
+          );
+          const matchedSkills = reqSkills.filter((s) =>
+            resumeSkillsLower.has(s.toLowerCase())
+          ).length;
+          const skillCoverage = Math.round((matchedSkills / totalReq) * 100);
+
+          originalScore = {
+            matched_skills: matchedSkills,
+            total_required_skills: totalReq,
+            overallScore: Math.round(skillCoverage * 0.4 + 20),
+            skillCoverageScore: skillCoverage,
+            responsibilityAlignmentScore: 20,
+            keywordScore: 25,
+            seniorityScore: 70,
+            criticalMissingRequirements: reqSkills.filter(
+              (s) => !resumeSkillsLower.has(s.toLowerCase())
+            ),
+            explanation: `Original match: matched ${matchedSkills} of ${totalReq} required skills (${skillCoverage}%).`,
+          };
+        }
         console.log("[tailor-run] Step 3 complete");
         return ok({ originalScore });
       }
@@ -203,7 +239,7 @@ export async function POST(request: NextRequest) {
                   jdProfile as unknown as Record<string, unknown>
                 ),
                 RewrittenBulletSchema,
-                { maxTokens: 2048 }
+                { maxTokens: 2500 }
               );
             } catch (bulletErr) {
               const errMsg =
@@ -243,7 +279,7 @@ export async function POST(request: NextRequest) {
             jdProfile as unknown as Record<string, unknown>
           ),
           GapAnalysisResultSchema,
-          { maxTokens: 2048 }
+          { maxTokens: 2500 }
         );
         const order: Record<string, number> = { high: 0, medium: 1, low: 2 };
         const gaps = [...gapResult.gaps].sort(
@@ -265,18 +301,33 @@ export async function POST(request: NextRequest) {
         console.log("[tailor-run] Step 6: Scoring tailored resume...", {
           promptVersion: MATCH_SCORING_PROMPT_VERSION,
         });
-        const tailoredScore = await callGroq(
-          MATCH_SCORING_SYSTEM_PROMPT,
-          buildMatchScoringUserPrompt(
-            resumeProfile as unknown as Record<string, unknown>,
-            jdProfile as unknown as Record<string, unknown>,
-            true // isTailored
-          ),
-          MatchScoreSchema,
-          { maxTokens: 2048 }
-        );
+        const fastModel = process.env.GROQ_FAST_MODEL ?? "openai/gpt-oss-20b";
+        let tailoredScore: z.infer<typeof MatchScoreSchema> | null = null;
+        try {
+          tailoredScore = await callGroq(
+            MATCH_SCORING_SYSTEM_PROMPT,
+            buildMatchScoringUserPrompt(
+              resumeProfile as unknown as Record<string, unknown>,
+              jdProfile as unknown as Record<string, unknown>,
+              true // isTailored
+            ),
+            MatchScoreSchema,
+            {
+              model: fastModel,
+              temperature: 0.1,
+              maxTokens: 2500,
+              maxRetries: 1, // Do not retry on free tier — fail fast
+            }
+          );
+        } catch (scoringErr) {
+          console.warn(
+            "[tailor-run] Step 6 scoring failed — delegating to client dynamic scoring:",
+            scoringErr
+          );
+          return ok({ tailoredScore: null, fallbackToLocalScore: true });
+        }
         console.log("[tailor-run] Step 6 complete");
-        return ok({ tailoredScore });
+        return ok({ tailoredScore, fallbackToLocalScore: false });
       }
 
       default:

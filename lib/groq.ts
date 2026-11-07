@@ -9,7 +9,7 @@
  * - Auth errors (401, 403) and Zod validation errors on final attempt throw immediately
  * - Zod validation with error-injection retry loop
  * - Structured logger: log.info / log.warn / log.error prefixed with [groq]
- * - Per-call maxTokens override; no global default (callers set their own)
+ * - Per-call maxTokens override (defaults to 2500)
  * - Model overridable via GROQ_MODEL env var
  */
 
@@ -78,15 +78,14 @@ function getClient(): Groq {
 // ── Types ────────────────────────────────────────────────────────────────────
 
 export interface CallGroqOptions {
-  /** Model to use. Falls back to GROQ_MODEL env var, then "openai/gpt-oss-20b". */
+  /** Model to use. Falls back to GROQ_MODEL env var, then "openai/gpt-oss-120b". */
   model?: string;
   /** Sampling temperature. Default 0 (deterministic). */
   temperature?: number;
   /** Maximum retry attempts. Default 3. */
   maxRetries?: number;
   /**
-   * Maximum tokens for this call. No global default — callers MUST set their own.
-   * If omitted, the Groq SDK default applies (model-dependent).
+   * Maximum tokens for this call. Default 2048.
    */
   maxTokens?: number;
 }
@@ -281,10 +280,10 @@ export async function callGroq<T>(
 ): Promise<T> {
   const {
     // Model: env-var override → explicit option → hardcoded fallback
-    model = process.env.GROQ_MODEL ?? "openai/gpt-oss-20b",
+    model = process.env.GROQ_MODEL ?? "openai/gpt-oss-120b",
     temperature = 0,
     maxRetries = 3,
-    maxTokens,
+    maxTokens = 2500,
   } = opts;
 
   const client = getClient();

@@ -77,6 +77,8 @@ export interface TailoringRunResult {
   errors?: string[];
   /** Step-level non-fatal failures that are not pipeline blockers. */
   softFailures?: string[];
+  /** Flag indicating whether tailored score was generated locally via calculateDynamicScore. */
+  localScoreFallback?: boolean;
 }
 
 export interface PipelineProgressEvent {
@@ -112,12 +114,13 @@ const DEFAULT_RATE_LIMIT_WAIT_MS = 60_000; // 60 s — Groq's TPM bucket reset w
 async function callStep<T>(
   step: string,
   body: Record<string, unknown>,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  maxRetries = MAX_RETRIES
 ): Promise<T> {
   const serialisedBody = JSON.stringify(body);
 
-  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-    console.log(`[api] → Step ${step} attempt ${attempt}/${MAX_RETRIES}`);
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    console.log(`[api] → Step ${step} attempt ${attempt}/${maxRetries}`);
 
     const response = await fetch(`/api/tailor-run?step=${step}`, {
       method: "POST",
@@ -128,8 +131,8 @@ async function callStep<T>(
 
     // ── 429 Rate-limited — back off and retry ─────────────────────────────
     if (response.status === 429) {
-      if (attempt === MAX_RETRIES) {
-        console.error(`[api] ✗ Step ${step} rate-limited after ${MAX_RETRIES} attempts — giving up`);
+      if (attempt === maxRetries) {
+        console.error(`[api] ✗ Step ${step} rate-limited after ${maxRetries} attempts — giving up`);
         throw new ApiError(
           `Groq rate limit hit on step ${step}. Please wait a minute and try again.`,
           429
@@ -409,34 +412,54 @@ export async function runTailoringPipeline(
     });
 
     let tailoredScore: MatchScore;
+    let localScoreFallback = false;
+
     try {
-      const result = await callStep<{ tailoredScore: MatchScore }>(
+      // Fail-fast on Step 6 scoring: maxRetries = 1 (do NOT retry network request if it fails/times out)
+      const result = await callStep<{
+        tailoredScore: MatchScore | null;
+        fallbackToLocalScore?: boolean;
+      }>(
         "6",
         { resumeProfile: tailoredForScoring, jdProfile: safeJdProfile },
-        signal
+        signal,
+        1 // maxRetries = 1: fail-fast, never retry
       );
-      tailoredScore = result.tailoredScore;
-      // If the LLM returned a score that didn't reflect the applied changes
-      // (e.g. mirrored the original score despite rewritten bullets),
-      // dynamically compute the score based on the applied changes.
-      if (
-        tailoredScore.overallScore <= originalScore.overallScore &&
-        tailoredExperience.some((exp) => exp.bullets.some((b) => b.original !== b.tailored))
-      ) {
-        console.log("[api] Step 6 score mirrored original — dynamically recalculating based on changes");
+
+      if (result.fallbackToLocalScore || !result.tailoredScore) {
+        console.warn("[api] Step 6 server flagged local fallback — calculating score locally");
+        localScoreFallback = true;
         tailoredScore = calculateDynamicScore(
           originalScore,
           safeJdProfile,
           tailoredExperience,
           safeResumeProfile.skills
         );
+      } else {
+        tailoredScore = result.tailoredScore;
+        // Verify it improved over original; if not, dynamically calculate
+        if (
+          tailoredScore.overallScore <= originalScore.overallScore &&
+          tailoredExperience.some((exp) => exp.bullets.some((b) => b.original !== b.tailored))
+        ) {
+          console.log("[api] Step 6 score mirrored original — dynamically recalculating based on changes");
+          tailoredScore = calculateDynamicScore(
+            originalScore,
+            safeJdProfile,
+            tailoredExperience,
+            safeResumeProfile.skills
+          );
+        }
       }
-      console.log(`[api] Step 6 ✓ — tailored score: ${tailoredScore.overallScore}`);
+      console.log(`[api] Step 6 complete — tailored score: ${tailoredScore.overallScore}`);
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
-      console.error("[api] Step 6 FAILED:", errMsg);
-      softFailures.push(`Tailored scoring failed: ${errMsg}`);
-      // Dynamically calculate based on applied changes instead of mirroring original score!
+      console.warn(
+        `[api] Step 6 scoring API failed (${errMsg}) — fail-fast fallback to local calculateDynamicScore without retries`
+      );
+      softFailures.push(`Step 6 API scoring bypassed (fail-fast fallback): ${errMsg}`);
+      localScoreFallback = true;
+      // Generate final tailored score locally using calculateDynamicScore, saving API bandwidth
       tailoredScore = calculateDynamicScore(
         originalScore,
         safeJdProfile,
@@ -491,6 +514,7 @@ export async function runTailoringPipeline(
       status,
       errors: allErrors.length > 0 ? allErrors : undefined,
       softFailures: softFailures.length > 0 ? softFailures : undefined,
+      localScoreFallback,
     };
   } catch (err) {
     const message =
