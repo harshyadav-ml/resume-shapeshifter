@@ -87,4 +87,3 @@ export default function JDInput({ value, onChange, className }: JDInputProps) {
     </div>
   );
 }
-
