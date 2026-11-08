@@ -118,7 +118,7 @@ export default function PipelineProgress({
                 )}
               </div>
               {isRunning && (
-                <span className="text-[10px] font-bold text-primary uppercase tracking-wider mt-1 shrink-0">
+                <span className="text-xs font-bold text-primary uppercase tracking-wider mt-0.5 shrink-0">
                   Running
                 </span>
               )}

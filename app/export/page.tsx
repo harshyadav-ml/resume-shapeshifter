@@ -8,8 +8,10 @@ import GapAnalysis from "@/components/GapAnalysis";
 import PDFExportButton from "@/components/PDFExportButton";
 import ReviewGate from "@/components/ReviewGate";
 import ErrorBanner from "@/components/ErrorBanner";
-import { ArrowLeft, Download } from "lucide-react";
+import { ArrowLeft, Download, Copy, Check } from "lucide-react";
 import Link from "next/link";
+import { TailoringRun } from "@/types";
+import { cn } from "@/lib/utils";
 
 // NOTE: @react-pdf/renderer uses browser-only APIs (canvas, Blob, etc.).
 // Do NOT import it at module level — it crashes during Next.js SSR even on
@@ -17,10 +19,64 @@ import Link from "next/link";
 // Both `pdf` and the PDF document components are dynamically imported inside
 // the click handlers so they are only ever evaluated in the browser.
 
+function buildMarkdownResume(run: TailoringRun): string {
+  const { tailoredResume } = run;
+  const lines: string[] = [];
+
+  if (run.resumeProfile?.contact?.name) {
+    lines.push(`# ${run.resumeProfile.contact.name}`);
+    const contactParts = [
+      run.resumeProfile.contact.email,
+      run.resumeProfile.contact.phone,
+      run.resumeProfile.contact.location,
+      run.resumeProfile.contact.linkedin,
+      run.resumeProfile.contact.github,
+    ].filter(Boolean);
+    if (contactParts.length > 0) {
+      lines.push(contactParts.join(" | "));
+    }
+    lines.push("");
+  }
+
+  if (tailoredResume?.tailoredSummary) {
+    lines.push("## Summary");
+    lines.push(tailoredResume.tailoredSummary);
+    lines.push("");
+  }
+
+  if (tailoredResume?.tailoredSkills && tailoredResume.tailoredSkills.length > 0) {
+    lines.push("## Skills");
+    lines.push(tailoredResume.tailoredSkills.join(", "));
+    lines.push("");
+  }
+
+  if (tailoredResume?.tailoredExperience && tailoredResume.tailoredExperience.length > 0) {
+    lines.push("## Experience");
+    tailoredResume.tailoredExperience.forEach((exp) => {
+      lines.push(`### ${exp.title} — ${exp.company}`);
+      exp.bullets.forEach((b) => {
+        lines.push(`- ${b.tailored}`);
+      });
+      lines.push("");
+    });
+  }
+
+  if (run.resumeProfile?.education && run.resumeProfile.education.length > 0) {
+    lines.push("## Education");
+    run.resumeProfile.education.forEach((edu) => {
+      lines.push(`- ${edu.degree} in ${edu.field}, ${edu.institution} (${edu.graduationDate})`);
+    });
+    lines.push("");
+  }
+
+  return lines.join("\n");
+}
+
 export default function ExportPage() {
   const { state } = useAppContext();
   const router = useRouter();
   const [exportErrors, setExportErrors] = useState<string[]>([]);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (state.status === "idle") {
@@ -30,10 +86,10 @@ export default function ExportPage() {
 
   if (!state.tailoringRun) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p className="text-muted-foreground text-sm">
+      <div className="min-h-screen bg-[#070709] flex items-center justify-center">
+        <p className="text-gray-400 text-sm font-mono">
           No run found.{" "}
-          <Link href="/input" className="text-primary underline">
+          <Link href="/input" className="text-teal-400 underline underline-offset-4">
             Start over.
           </Link>
         </p>
@@ -59,13 +115,15 @@ export default function ExportPage() {
   const handleExportTailored = async () => {
     try {
       setExportErrors([]);
-      // Lazily import both the renderer and the PDF component at click time only.
       const [{ pdf }, { default: TailoredResumePDF }] = await Promise.all([
         import("@react-pdf/renderer"),
         import("@/components/pdf/TailoredResumePDF"),
       ]);
       const blob = await pdf(<TailoredResumePDF run={tailoringRun} />).toBlob();
-      const safeCompany = tailoringRun.jdProfile.company.replace(/[^a-zA-Z0-9]/g, "-");
+      const safeCompany = (tailoringRun.jdProfile.company || "Company").replace(
+        /[^a-zA-Z0-9]/g,
+        "-"
+      );
       downloadBlob(blob, `Tailored_Resume_${safeCompany}.pdf`);
     } catch (err) {
       console.error("PDF generation failed:", err);
@@ -77,13 +135,15 @@ export default function ExportPage() {
   const handleExportComparison = async () => {
     try {
       setExportErrors([]);
-      // Same lazy-import pattern for the comparison PDF.
       const [{ pdf }, { default: ComparisonPDF }] = await Promise.all([
         import("@react-pdf/renderer"),
         import("@/components/pdf/ComparisonPDF"),
       ]);
       const blob = await pdf(<ComparisonPDF run={tailoringRun} />).toBlob();
-      const safeCompany = tailoringRun.jdProfile.company.replace(/[^a-zA-Z0-9]/g, "-");
+      const safeCompany = (tailoringRun.jdProfile.company || "Company").replace(
+        /[^a-zA-Z0-9]/g,
+        "-"
+      );
       downloadBlob(blob, `Comparison_Report_${safeCompany}.pdf`);
     } catch (err) {
       console.error("Comparison PDF generation failed:", err);
@@ -92,47 +152,61 @@ export default function ExportPage() {
     }
   };
 
+  const handleCopyMarkdown = async () => {
+    try {
+      const md = buildMarkdownResume(tailoringRun);
+      await navigator.clipboard.writeText(md);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch (err) {
+      console.error("Failed to copy markdown:", err);
+    }
+  };
+
   // Count review stats for the summary
   const allBullets = tailoringRun.tailoredResume.tailoredExperience.flatMap(
     (exp) => exp.bullets
   );
-  const changedBullets = allBullets.filter(
-    (b) => b.original !== b.tailored
-  );
-  const acceptedCount = changedBullets.filter(
-    (b) => b.confirmed === true
-  ).length;
-  const revertedCount = changedBullets.filter(
-    (b) => b.confirmed === false
-  ).length;
+  const changedBullets = allBullets.filter((b) => b.original !== b.tailored);
+  const acceptedCount = changedBullets.filter((b) => b.confirmed === true).length;
+  const revertedCount = changedBullets.filter((b) => b.confirmed === false).length;
+
+  const highGaps = tailoringRun.gaps.filter((g) => g.importance === "high");
+  const medGaps = tailoringRun.gaps.filter((g) => g.importance === "medium");
 
   return (
-    <main className="min-h-screen max-w-5xl mx-auto px-6 py-10 page-enter">
-      {/* Header */}
-      <div className="mb-8">
-        <div className="flex items-center gap-2 text-sm text-primary font-semibold mb-2">
-          <Download className="h-4 w-4" />
-          Step 4 of 4 — Export
+    <main className="min-h-screen bg-[#070709] text-gray-200 antialiased max-w-3xl mx-auto px-6 sm:px-8 md:px-10 pt-8 pb-24 space-y-7">
+      {/* ── Page Title & Subtitle ─────────────────────────────────── */}
+      <section className="space-y-1.5" data-purpose="page-heading">
+        <div className="flex items-center space-x-2 text-xs text-zinc-400 font-medium font-mono mb-1">
+          <Download className="w-4 h-4 text-[#41F0B1]" />
+          <span>Step 4 of 4 — Export</span>
         </div>
-        <h1 className="text-3xl font-bold">Export Your Resume</h1>
-        <p className="text-muted-foreground mt-1">
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">Export Your Resume</h1>
+        <p className="text-sm text-zinc-300">
           Download your tailored resume PDF or a full side-by-side comparison.
         </p>
-      </div>
+      </section>
 
-      {/* Score summary */}
-      <section className="mb-8">
-        <h2 className="text-xl font-bold mb-1 flex items-center gap-2">
-          Final Score
-          {improvement > 0 && (
-            <span className="text-sm font-semibold text-emerald-500 bg-emerald-500/10 border border-emerald-500/25 rounded-full px-2 py-0.5">
-              +{improvement} pts improvement
-            </span>
-          )}
-        </h2>
-        <p className="text-muted-foreground text-sm mb-4">
-          From {tailoringRun.originalScore.overallScore} → {tailoringRun.tailoredScore.overallScore} out of 100
-        </p>
+      {/* ── BEGIN: FinalScoreSection ──────────────────────────────── */}
+      <section className="space-y-3" data-purpose="score-summary">
+        {/* Section Header */}
+        <div className="space-y-1">
+          <div className="flex items-center gap-2.5">
+            <h2 className="text-base sm:text-lg font-semibold text-white">Final Score</h2>
+            {improvement !== null && improvement > 0 && (
+              <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-[#0f2e24] text-[#34d399] border border-[#164e3b] font-mono">
+                +{improvement} pts improvement
+              </span>
+            )}
+          </div>
+          <p className="text-xs sm:text-sm text-zinc-300 font-mono">
+            From {tailoringRun.originalScore.overallScore} →{" "}
+            {tailoringRun.tailoredScore.overallScore} out of 100
+          </p>
+        </div>
+
+        {/* Scorecard Component */}
         <ScoreCard
           originalScore={tailoringRun.originalScore}
           tailoredScore={tailoringRun.tailoredScore}
@@ -140,78 +214,119 @@ export default function ExportPage() {
         />
       </section>
 
-      {/* Review stats */}
+      {/* ── Bullets Changed Simple Info ───────────────────────────── */}
       {changedBullets.length > 0 && (
-        <section className="mb-6">
-          <div className="flex flex-wrap items-center gap-3 text-sm">
-            <span className="text-muted-foreground">
-              {changedBullets.length} bullets changed
+        <div className="text-xs sm:text-sm text-zinc-300 pt-1 flex flex-wrap items-center gap-3 font-mono">
+          <span>{changedBullets.length} bullets changed</span>
+          {acceptedCount > 0 && (
+            <span className="px-2.5 py-1 rounded text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">
+              ✓ {acceptedCount} accepted
             </span>
-            {acceptedCount > 0 && (
-              <span className="chip text-[11px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25">
-                ✓ {acceptedCount} accepted
-              </span>
-            )}
-            {revertedCount > 0 && (
-              <span className="chip text-[11px] bg-zinc-500/10 text-zinc-600 dark:text-zinc-400 border border-zinc-500/25">
-                ↩ {revertedCount} reverted
-              </span>
-            )}
-          </div>
-        </section>
+          )}
+          {revertedCount > 0 && (
+            <span className="px-2.5 py-1 rounded text-xs font-medium bg-zinc-500/10 text-zinc-300 border border-zinc-500/25">
+              ↩ {revertedCount} reverted
+            </span>
+          )}
+        </div>
       )}
 
-      {/* High priority gaps */}
-      {tailoringRun.gaps.filter((g) => g.importance === "high").length > 0 && (
-        <section className="mb-8">
-          <h2 className="text-lg font-semibold mb-3">Remaining High-Priority Gaps</h2>
-          <p className="text-sm text-muted-foreground mb-4">
-            These gaps still exist in your tailored resume. Review before submitting.
-          </p>
+      {/* ── BEGIN: RemainingGapsSection ───────────────────────────── */}
+      {highGaps.length > 0 && (
+        <section className="space-y-3.5" data-purpose="remaining-gaps">
+          <div className="space-y-1">
+            <h2 className="text-base sm:text-lg font-semibold text-white">
+              Remaining High-Priority Gaps
+            </h2>
+            <p className="text-sm text-zinc-300">
+              These gaps still exist in your tailored resume. Review before submitting.
+            </p>
+            <div className="flex items-center gap-2.5 pt-1 text-xs sm:text-sm font-mono">
+              <span className="text-zinc-200 font-medium">
+                {tailoringRun.gaps.length} gaps identified
+              </span>
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#2e1518] text-[#f87171] border border-[#4f1f25]">
+                {highGaps.length} High
+              </span>
+              {medGaps.length > 0 && (
+                <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#241f17] text-[#fbbf24] border border-[#4d3d1e]">
+                  {medGaps.length} Medium
+                </span>
+              )}
+            </div>
+          </div>
+
           <GapAnalysis gaps={tailoringRun.gaps} highOnly />
         </section>
       )}
 
-      {/* Export errors */}
+      {/* ── Export Errors ─────────────────────────────────────────── */}
       {exportErrors.length > 0 && (
         <ErrorBanner
           title="PDF Export Failed"
           errors={exportErrors}
           onDismiss={() => setExportErrors([])}
-          className="mb-6"
         />
       )}
 
-      {/* Export buttons — wrapped in ReviewGate */}
-      <section className="rounded-2xl border bg-card p-6 mb-8">
-        <h2 className="text-lg font-semibold mb-2">Download</h2>
-        <p className="text-sm text-muted-foreground mb-5">
-          Choose your export format:
-        </p>
+      {/* ── BEGIN: DownloadSection ────────────────────────────────── */}
+      <section className="space-y-4 pt-2" data-purpose="download-box">
+        <div className="space-y-1">
+          <h2 className="text-base sm:text-lg font-semibold text-white">Download</h2>
+          <p className="text-sm text-zinc-300">Choose your export format:</p>
+        </div>
+
         <ReviewGate tailoredResume={tailoringRun.tailoredResume}>
-          <PDFExportButton
-            onExportTailored={handleExportTailored}
-            onExportComparison={handleExportComparison}
-          />
+          <div className="flex flex-wrap items-center gap-3">
+            <PDFExportButton
+              onExportTailored={handleExportTailored}
+              onExportComparison={handleExportComparison}
+            />
+
+            {/* Copy Markdown Button */}
+            <button
+              type="button"
+              id="copy-markdown-btn"
+              onClick={handleCopyMarkdown}
+              className={cn(
+                "flex items-center gap-2 px-4.5 py-2.5 rounded-lg text-xs sm:text-sm font-medium transition-all duration-150 ease-out shadow-sm",
+                copied
+                  ? "bg-zinc-800 border border-zinc-600 text-zinc-200"
+                  : "bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-700/60"
+              )}
+              aria-label="Copy tailored resume markdown to clipboard"
+            >
+              {copied ? (
+                <>
+                  <Check className="w-4 h-4 text-emerald-400" />
+                  <span>Copied!</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="w-4 h-4 text-zinc-400" />
+                  <span>Copy Markdown</span>
+                </>
+              )}
+            </button>
+          </div>
         </ReviewGate>
-        <p className="text-xs text-muted-foreground mt-4">
+
+        <p className="text-xs text-zinc-400 pt-0.5 font-mono">
           PDFs are generated locally in your browser. No data is sent to the server for PDF export.
         </p>
       </section>
 
-
-
-      {/* Back nav */}
-      <div className="pt-4 border-t border-border/50">
+      {/* ── BEGIN: FooterBackNav ──────────────────────────────────── */}
+      <footer className="pt-2">
         <Link
           href="/tailor"
           id="back-to-tailor"
-          className="flex items-center gap-2 text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors w-fit"
+          className="inline-flex items-center gap-1.5 text-xs sm:text-sm text-zinc-400 hover:text-white transition-colors font-medium"
         >
-          <ArrowLeft className="h-4 w-4" />
-          Back to Tailor
+          <ArrowLeft className="w-4 h-4" />
+          <span>Back to Tailor</span>
         </Link>
-      </div>
+      </footer>
     </main>
   );
 }

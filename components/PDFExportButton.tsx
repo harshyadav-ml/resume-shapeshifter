@@ -42,26 +42,25 @@ export default function PDFExportButton({
   };
 
   return (
-    <div className={cn("flex flex-col sm:flex-row gap-3", className)}>
-      {/* Tailored Resume */}
+    <div className={cn("flex flex-wrap items-center gap-3", className)}>
+      {/* Tailored Resume PDF */}
       <button
         type="button"
         id="export-tailored-pdf"
         disabled={disabled || loadingTailored}
         onClick={handleTailored}
         className={cn(
-          "flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-semibold text-sm transition-all",
-          "bg-primary text-primary-foreground hover:bg-primary/90 shadow-md shadow-primary/20",
+          "flex items-center gap-2 bg-[#d1d5db] text-gray-950 hover:bg-white px-4.5 py-2.5 rounded-lg text-xs sm:text-sm font-bold transition-colors shadow-sm",
           "disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
         )}
         aria-label="Export tailored resume as PDF"
       >
         {loadingTailored ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
+          <Loader2 className="w-4 h-4 animate-spin" />
         ) : (
-          <FileDown className="h-4 w-4" />
+          <FileDown className="w-4 h-4" />
         )}
-        {loadingTailored ? "Generating..." : "Export Tailored Resume"}
+        <span>{loadingTailored ? "Generating PDF…" : "Export Tailored Resume"}</span>
       </button>
 
       {/* Comparison PDF */}
@@ -71,18 +70,17 @@ export default function PDFExportButton({
         disabled={disabled || loadingComparison}
         onClick={handleComparison}
         className={cn(
-          "flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-semibold text-sm transition-all",
-          "bg-blue-600 text-white hover:bg-blue-500 shadow-md shadow-blue-500/20 active:translate-y-0",
+          "flex items-center gap-2 bg-[#2563eb] hover:bg-blue-600 text-white px-4.5 py-2.5 rounded-lg text-xs sm:text-sm font-bold transition-colors shadow-sm",
           "disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
         )}
         aria-label="Export side-by-side comparison PDF"
       >
         {loadingComparison ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
+          <Loader2 className="w-4 h-4 animate-spin" />
         ) : (
-          <FileDown className="h-4 w-4" />
+          <FileDown className="w-4 h-4" />
         )}
-        {loadingComparison ? "Generating..." : "Export Comparison PDF"}
+        <span>{loadingComparison ? "Generating Report…" : "Export Comparison PDF"}</span>
       </button>
     </div>
   );

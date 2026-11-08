@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { TailoredResume } from "@/types";
-import { ShieldAlert, CheckCircle2, ArrowUpRight } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 
@@ -12,13 +12,6 @@ interface ReviewGateProps {
   className?: string;
 }
 
-/**
- * ReviewGate wraps the export buttons and blocks them until:
- *   1. All risk-flagged bullets have been explicitly accepted or reverted.
- *   2. The user checks "I have reviewed all changes".
- *
- * If there are no risk flags at all, the gate is transparent.
- */
 export default function ReviewGate({
   tailoredResume,
   children,
@@ -26,26 +19,17 @@ export default function ReviewGate({
 }: ReviewGateProps) {
   const [acknowledged, setAcknowledged] = useState(false);
 
-  // Gather all changed bullets with risk flags
-  const riskyBullets: { company: string; title: string; ei: number; bi: number; text: string }[] = [];
-  tailoredResume.tailoredExperience.forEach((exp, ei) => {
-    exp.bullets.forEach((b, bi) => {
-      if (b.riskFlag && b.original !== b.tailored) {
-        riskyBullets.push({
-          company: exp.company,
-          title: exp.title,
-          ei,
-          bi,
-          text: b.tailored.slice(0, 80) + (b.tailored.length > 80 ? "…" : ""),
-        });
-      }
-    });
-  });
-
-  // Unreviewed = has risk flag but confirmed is undefined (neither accepted nor reverted)
+  // Unreviewed = has risk flag, was changed, but neither confirmed nor reverted
   const unreviewedBullets = tailoredResume.tailoredExperience.flatMap((exp, ei) =>
     exp.bullets
-      .map((b, bi) => ({ ...b, ei, bi, company: exp.company }))
+      .map((b, bi) => ({
+        ...b,
+        ei,
+        bi,
+        company: exp.company,
+        title: exp.title,
+        text: b.tailored.slice(0, 65) + (b.tailored.length > 65 ? "…" : ""),
+      }))
       .filter(
         (b) =>
           b.riskFlag &&
@@ -54,107 +38,66 @@ export default function ReviewGate({
       )
   );
 
-  const hasRisks = riskyBullets.length > 0;
-  const allReviewed = unreviewedBullets.length === 0;
-  const canExport = !hasRisks || (allReviewed && acknowledged);
-
-  // No risk flags → gate is transparent
-  if (!hasRisks) {
-    return <>{children}</>;
-  }
+  const hasUnreviewed = unreviewedBullets.length > 0;
+  const canExport = !hasUnreviewed || acknowledged;
 
   return (
     <div className={cn("space-y-4", className)}>
-      {/* Status card */}
-      <div
-        className={cn(
-          "rounded-2xl border p-5 transition-all duration-300",
-          canExport
-            ? "border-emerald-500/30 bg-emerald-500/5"
-            : "border-blue-500/30 bg-blue-500/5"
-        )}
-      >
-        {/* Header */}
-        <div className="flex items-start gap-3 mb-4">
-          {canExport ? (
-            <CheckCircle2 className="h-5 w-5 text-emerald-500 mt-0.5 shrink-0" />
-          ) : (
-            <ShieldAlert className="h-5 w-5 text-blue-400 mt-0.5 shrink-0" />
-          )}
-          <div>
-            <p
-              className={cn(
-                "text-sm font-semibold",
-                canExport
-                  ? "text-emerald-700 dark:text-emerald-400"
-                  : "text-blue-600 dark:text-blue-400"
-              )}
-            >
-              {canExport
-                ? "All changes reviewed — ready to export"
-                : `${unreviewedBullets.length} unreviewed risk flag${
-                    unreviewedBullets.length !== 1 ? "s" : ""
-                  }. Please review before exporting.`}
+      {hasUnreviewed && (
+        <div className="border border-[#1e2a3a] bg-[#0c131c] rounded-xl p-4.5 space-y-3.5">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 text-sky-400 text-xs sm:text-sm font-semibold">
+              <AlertTriangle className="w-4 h-4 shrink-0 text-sky-400" />
+              <span>
+                {unreviewedBullets.length} unreviewed risk flag
+                {unreviewedBullets.length > 1 ? "s" : ""}. Please review before exporting.
+              </span>
+            </div>
+            <p className="text-xs text-zinc-300 pl-6">
+              Go to the tailor page and accept or revert each flagged bullet.
             </p>
-            {!allReviewed && (
-              <p className="text-xs text-muted-foreground mt-1">
-                Go to the tailor page and accept or revert each flagged bullet.
-              </p>
-            )}
           </div>
-        </div>
 
-        {/* Unreviewed bullets list */}
-        {!allReviewed && unreviewedBullets.length > 0 && (
-          <div className="space-y-1.5 mb-4 max-h-40 overflow-y-auto pr-2">
-            {unreviewedBullets.map((b) => (
+          {/* Warning Bullet Item Rows */}
+          <div className="space-y-2 pt-1">
+            {unreviewedBullets.slice(0, 5).map((b, idx) => (
               <div
-                key={`${b.ei}-${b.bi}`}
-                className="flex items-center justify-between gap-2 text-xs bg-background/60 rounded-lg px-3 py-2 border border-border/50"
+                key={idx}
+                className="flex items-center justify-between bg-[#121a24] border border-[#1d2b3c] rounded-lg px-3.5 py-2 text-xs sm:text-sm"
               >
-                <div className="min-w-0">
-                  <span className="font-semibold text-foreground">
-                    {b.company}
+                <span className="text-zinc-200 truncate mr-2">
+                  <strong className="font-semibold text-white">{b.company}</strong> —{" "}
+                  <span className="text-zinc-400 font-mono text-xs">
+                    &ldquo;{b.text}&rdquo;
                   </span>
-                  <span className="text-muted-foreground"> — </span>
-                  <span className="text-muted-foreground truncate">
-                    &ldquo;{b.tailored.slice(0, 60)}
-                    {b.tailored.length > 60 ? "…" : ""}&rdquo;
-                  </span>
-                </div>
+                </span>
                 <Link
-                  href={`/tailor#bullet-${b.ei}-${b.bi}`}
-                  className="text-primary hover:underline shrink-0 flex items-center gap-0.5"
+                  href="/tailor"
+                  className="text-zinc-200 hover:text-white flex items-center gap-1 shrink-0 text-xs font-semibold underline underline-offset-2"
                 >
-                  Review
-                  <ArrowUpRight className="h-3 w-3" />
+                  Review ↗
                 </Link>
               </div>
             ))}
           </div>
-        )}
 
-        {/* Acknowledgment checkbox — only shown once all bullets have been individually reviewed */}
-        {allReviewed && (
-          <label
-            htmlFor="review-ack-checkbox"
-            className="flex items-center gap-3 cursor-pointer group"
-          >
+          {/* Acknowledgment Checkbox */}
+          <label className="flex items-center gap-2.5 pt-1 text-xs sm:text-sm text-sky-200 cursor-pointer select-none">
             <input
-              id="review-ack-checkbox"
               type="checkbox"
+              id="acknowledge-review"
               checked={acknowledged}
               onChange={(e) => setAcknowledged(e.target.checked)}
-              className="h-4 w-4 rounded border-border accent-primary cursor-pointer"
+              className="rounded border-gray-700 bg-gray-900 text-teal-500 focus:ring-0 w-4 h-4"
             />
-            <span className="text-sm font-medium text-foreground/90 group-hover:text-foreground transition-colors select-none">
-              I have reviewed all changes and understand the risk flags
+            <span className="font-medium">
+              I acknowledge that I have reviewed all changes and accept any remaining risks
             </span>
           </label>
-        )}
-      </div>
+        </div>
+      )}
 
-      {/* Export buttons — enabled/disabled based on gate status */}
+      {/* Render export buttons with disabled state if unreviewed and not acknowledged */}
       <div className={cn(!canExport && "opacity-50 pointer-events-none select-none")}>
         {children}
       </div>

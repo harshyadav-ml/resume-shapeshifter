@@ -177,6 +177,50 @@ function appReducer(state: AppState, action: AppAction): AppState {
       };
     }
 
+    case "EDIT_BULLET": {
+      if (!state.tailoredResume) return state;
+      const updatedExperience = state.tailoredResume.tailoredExperience.map(
+        (exp, ei) => {
+          if (ei !== action.payload.experienceIndex) return exp;
+          return {
+            ...exp,
+            bullets: exp.bullets.map((bullet, bi) => {
+              if (bi !== action.payload.bulletIndex) return bullet;
+              return { ...bullet, tailored: action.payload.tailored, confirmed: true };
+            }),
+          };
+        }
+      );
+      const updatedTailored = {
+        ...state.tailoredResume,
+        tailoredExperience: updatedExperience,
+      };
+
+      // Recalculate tailoredScore based on the edited bullets
+      const updatedScore = state.tailoringRun
+        ? calculateDynamicScore(
+            state.tailoringRun.originalScore,
+            state.tailoringRun.jdProfile,
+            updatedExperience,
+            state.tailoringRun.resumeProfile.skills
+          )
+        : null;
+
+      const updatedRun = state.tailoringRun
+        ? {
+            ...state.tailoringRun,
+            tailoredResume: updatedTailored,
+            ...(updatedScore ? { tailoredScore: updatedScore } : {}),
+          }
+        : null;
+
+      return {
+        ...state,
+        tailoredResume: updatedTailored,
+        tailoringRun: updatedRun,
+      };
+    }
+
     case "RESET":
       return initialState;
 

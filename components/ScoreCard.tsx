@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import { MatchScore } from "@/types";
 import { cn } from "@/lib/utils";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
@@ -14,214 +14,9 @@ interface ScoreCardProps {
   tailoredLabel?: string;
 }
 
-/* ── Constants ───────────────────────────────────────────────── */
-const R = 88;
-const CIRCUMFERENCE = 2 * Math.PI * R;
+const R = 40;
+const CIRCUMFERENCE = 2 * Math.PI * R; // ~251.327
 
-/* ── Score colour thresholds ──────────────────────────────────── */
-function scoreColor(s: number): { stroke: string; text: string; bg: string; glow: string } {
-  if (s >= 80) return {
-    stroke: "#10b981",
-    text:   "text-emerald-400",
-    bg:     "bg-emerald-500/10",
-    glow:   "shadow-glow-emerald",
-  };
-  if (s >= 60) return {
-    stroke: "#3b82f6",
-    text:   "text-blue-400",
-    bg:     "bg-blue-500/10",
-    glow:   "shadow-glow-blue",
-  };
-  return {
-    stroke: "#ef4444",
-    text:   "text-red-400",
-    bg:     "bg-red-500/10",
-    glow:   "",
-  };
-}
-
-/* ── Animated counter hook ────────────────────────────────────── */
-function useCounter(target: number, duration = 1000) {
-  const [value, setValue] = useState(0);
-  const prevTargetRef = useRef(0);
-  const [started, setStarted] = useState(false);
-
-  useEffect(() => {
-    const t = setTimeout(() => setStarted(true), 100);
-    return () => clearTimeout(t);
-  }, []);
-
-  useEffect(() => {
-    if (!started) return;
-    const from = prevTargetRef.current;
-    prevTargetRef.current = target;
-    const start = performance.now();
-
-    let raf: number;
-    function tick(now: number) {
-      const progress = Math.min((now - start) / duration, 1);
-      // Ease-out cubic
-      const ease = 1 - Math.pow(1 - progress, 3);
-      setValue(Math.round(from + (target - from) * ease));
-      if (progress < 1) raf = requestAnimationFrame(tick);
-    }
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [started, target, duration]);
-
-  return value;
-}
-
-/* ── Single gauge ring ───────────────────────────────────────── */
-function GaugeRing({
-  score,
-  label,
-  size = 200,
-}: {
-  score: number;
-  label: string;
-  size?: number;
-}) {
-  const [animated, setAnimated] = useState(false);
-  const displayed = useCounter(score, 1300);
-  const colors = scoreColor(score);
-  const offset = CIRCUMFERENCE - (score / 100) * CIRCUMFERENCE;
-
-  useEffect(() => {
-    const t = setTimeout(() => setAnimated(true), 80);
-    return () => clearTimeout(t);
-  }, []);
-
-  return (
-    <div className="flex flex-col items-center gap-3">
-      {/* Ring */}
-      <div className="relative" style={{ width: size, height: size }}>
-        <svg
-          width={size}
-          height={size}
-          viewBox="0 0 200 200"
-          className="-rotate-90"
-          aria-label={`${label}: ${score} out of 100`}
-        >
-          {/* Outer decorative tick marks */}
-          {Array.from({ length: 36 }).map((_, i) => {
-            const angle = (i * 10 * Math.PI) / 180;
-            const cx = 100 + 96 * Math.cos(angle);
-            const cy = 100 + 96 * Math.sin(angle);
-            const ix = 100 + 88 * Math.cos(angle);
-            const iy = 100 + 88 * Math.sin(angle);
-            return (
-              <line
-                key={i}
-                x1={ix} y1={iy} x2={cx} y2={cy}
-                stroke="hsl(220 100% 100% / 0.06)"
-                strokeWidth={i % 9 === 0 ? "2" : "1"}
-                strokeLinecap="round"
-              />
-            );
-          })}
-          {/* Background track */}
-          <circle
-            cx="100" cy="100" r={R}
-            fill="none"
-            stroke="hsl(222 28% 12%)"
-            strokeWidth="14"
-          />
-          {/* Track inner shadow */}
-          <circle
-            cx="100" cy="100" r={R}
-            fill="none"
-            stroke="hsl(0 0% 0% / 0.4)"
-            strokeWidth="16"
-            strokeDasharray="4 2"
-            opacity="0.3"
-          />
-          {/* Score arc */}
-          <circle
-            cx="100" cy="100" r={R}
-            fill="none"
-            stroke={colors.stroke}
-            strokeWidth="14"
-            strokeLinecap="round"
-            strokeDasharray={CIRCUMFERENCE}
-            strokeDashoffset={animated ? offset : CIRCUMFERENCE}
-            style={{
-              transition: "stroke-dashoffset 1.3s cubic-bezier(0.34, 1.56, 0.64, 1)",
-              filter: `drop-shadow(0 0 8px ${colors.stroke}66)`,
-            }}
-          />
-        </svg>
-
-        {/* Center content */}
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-0.5">
-          <span className={cn("text-[2.6rem] font-black tabular-nums leading-none tracking-tight", colors.text)}>
-            {displayed}
-          </span>
-          <span className="text-[11px] font-semibold text-muted-foreground/60 tracking-widest uppercase">
-            / 100
-          </span>
-        </div>
-      </div>
-
-      {/* Label pill */}
-      <div className={cn(
-        "px-3 py-1 rounded-full text-[11px] font-bold tracking-widest uppercase border",
-        label === "Original"
-          ? "bg-muted/40 border-border text-muted-foreground"
-          : "bg-emerald-500/10 border-emerald-500/25 text-emerald-400"
-      )}>
-        {label}
-      </div>
-    </div>
-  );
-}
-
-/* ── Sub-score bar ───────────────────────────────────────────── */
-function SubScoreBar({ label, original, tailored, showBoth }: {
-  label: string;
-  original: number;
-  tailored?: number;
-  showBoth: boolean;
-}) {
-  const [animated, setAnimated] = useState(false);
-  useEffect(() => { const t = setTimeout(() => setAnimated(true), 300); return () => clearTimeout(t); }, []);
-
-  const displayVal = showBoth && tailored != null ? tailored : original;
-  const delta = tailored != null && showBoth ? tailored - original : 0;
-  const colors = scoreColor(displayVal);
-
-  return (
-    <div className="space-y-1.5">
-      <div className="flex items-center justify-between">
-        <span className="text-[11px] font-semibold text-muted-foreground/70 uppercase tracking-wider">{label}</span>
-        <div className="flex items-center gap-1.5">
-          <span className={cn("text-sm font-bold tabular-nums", colors.text)}>{displayVal}</span>
-          {showBoth && delta !== 0 && (
-            <span className={cn(
-              "text-[10px] font-bold rounded px-1",
-              delta > 0 ? "text-emerald-400 bg-emerald-500/10" : "text-red-400 bg-red-500/10"
-            )}>
-              {delta > 0 ? "+" : ""}{delta}
-            </span>
-          )}
-        </div>
-      </div>
-      {/* Track */}
-      <div className="h-1 rounded-full bg-muted/40 overflow-hidden">
-        <div
-          className="h-full rounded-full transition-all duration-1000 ease-smooth"
-          style={{
-            width: animated ? `${displayVal}%` : "0%",
-            background: colors.stroke,
-            boxShadow: `0 0 6px ${colors.stroke}66`,
-          }}
-        />
-      </div>
-    </div>
-  );
-}
-
-/* ── Main component (PROPS UNCHANGED) ────────────────────────── */
 export default function ScoreCard({
   originalScore,
   tailoredScore,
@@ -229,104 +24,336 @@ export default function ScoreCard({
   showBoth = false,
   tailoredLabel = "Tailored",
 }: ScoreCardProps) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const origScoreVal = Math.min(Math.max(originalScore.overallScore ?? 0, 0), 100);
+  const tailoredScoreVal = tailoredScore
+    ? Math.min(Math.max(tailoredScore.overallScore ?? 0, 0), 100)
+    : origScoreVal;
+
+  const origOffset = CIRCUMFERENCE - (origScoreVal / 100) * CIRCUMFERENCE;
+  const tailoredOffset = CIRCUMFERENCE - (tailoredScoreVal / 100) * CIRCUMFERENCE;
+
   const improvement = tailoredScore
     ? tailoredScore.overallScore - originalScore.overallScore
     : null;
 
+  // Subscores & deltas
+  const skillsVal = showBoth && tailoredScore
+    ? tailoredScore.skillCoverageScore
+    : originalScore.skillCoverageScore;
+  const skillsDelta = tailoredScore
+    ? tailoredScore.skillCoverageScore - originalScore.skillCoverageScore
+    : 0;
+
+  const respVal = showBoth && tailoredScore
+    ? tailoredScore.responsibilityAlignmentScore
+    : originalScore.responsibilityAlignmentScore;
+  const respDelta = tailoredScore
+    ? tailoredScore.responsibilityAlignmentScore - originalScore.responsibilityAlignmentScore
+    : 0;
+
+  const kwVal = showBoth && tailoredScore
+    ? tailoredScore.keywordScore
+    : originalScore.keywordScore;
+  const kwDelta = tailoredScore
+    ? tailoredScore.keywordScore - originalScore.keywordScore
+    : 0;
+
+  const senVal = showBoth && tailoredScore
+    ? tailoredScore.seniorityScore
+    : originalScore.seniorityScore;
+  const senDelta = tailoredScore
+    ? tailoredScore.seniorityScore - originalScore.seniorityScore
+    : 0;
+
   return (
-    <div className={cn(
-      "relative rounded-2xl overflow-hidden",
-      "bg-card border border-border/60",
-      "shadow-surface-2",
-      "before:absolute before:inset-0 before:bg-mesh-subtle before:pointer-events-none",
-      className
-    )}>
-      {/* Inner top highlight */}
-      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-
-      <div className="relative z-10 p-6 space-y-6">
-        {/* Rings row */}
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-10">
-          <GaugeRing score={originalScore.overallScore} label="Original" size={192} />
-
-          {showBoth && tailoredScore && (
-            <>
-              {/* Middle connector */}
-              <div className="flex flex-col items-center gap-2 sm:mt-0 -mt-2">
-                {improvement !== null && (
-                  <div className={cn(
-                    "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border",
-                    improvement > 0
-                      ? "bg-emerald-500/10 border-emerald-500/25 text-emerald-400"
-                      : improvement < 0
-                      ? "bg-red-500/10 border-red-500/25 text-red-400"
-                      : "bg-muted border-border text-muted-foreground"
-                  )}>
-                    {improvement > 0 ? (
-                      <TrendingUp className="h-3.5 w-3.5" />
-                    ) : improvement < 0 ? (
-                      <TrendingDown className="h-3.5 w-3.5" />
-                    ) : (
-                      <Minus className="h-3.5 w-3.5" />
-                    )}
-                    {improvement > 0 && "+"}{improvement} pts
-                  </div>
-                )}
-                {/* Arrow */}
-                <svg viewBox="0 0 48 16" className="w-12 h-4 text-border hidden sm:block" fill="none">
-                  <path d="M0 8 H40 M33 2 L42 8 L33 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-              <GaugeRing score={tailoredScore.overallScore} label={tailoredLabel} size={192} />
-            </>
-          )}
-        </div>
-
-        {/* Explanation */}
-        <div className="separator-gradient" />
-        <p className="text-sm text-muted-foreground/80 leading-relaxed">
-          {(showBoth && tailoredScore?.explanation) || originalScore.explanation}
-        </p>
-
-        {/* Sub-scores */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          {[
-            { label: "Skills",          original: originalScore.skillCoverageScore,          tailored: tailoredScore?.skillCoverageScore },
-            { label: "Responsibilities",original: originalScore.responsibilityAlignmentScore, tailored: tailoredScore?.responsibilityAlignmentScore },
-            { label: "Keywords",        original: originalScore.keywordScore,                 tailored: tailoredScore?.keywordScore },
-            { label: "Seniority",       original: originalScore.seniorityScore,               tailored: tailoredScore?.seniorityScore },
-          ].map((item) => (
-            <div key={item.label} className="rounded-xl bg-muted/20 border border-border/40 px-3 py-3">
-              <SubScoreBar
-                label={item.label}
-                original={item.original}
-                tailored={item.tailored}
-                showBoth={showBoth}
+    <div
+      className={cn(
+        "border border-[#26262e] rounded-xl bg-[#0d0d11] p-5 space-y-5 shadow-xl",
+        className
+      )}
+    >
+      {/* ── Score Circular Gauges Comparison ─────────────────────── */}
+      <div className="flex items-center justify-center gap-6 py-1">
+        {/* Original Gauge */}
+        <div className="flex flex-col items-center">
+          <div className="relative w-24 h-24 flex items-center justify-center">
+            <svg className="w-full h-full -rotate-90 transform" viewBox="0 0 100 100">
+              <defs>
+                <linearGradient id="origGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor="#f87171" />
+                  <stop offset="100%" stopColor="#fb923c" />
+                </linearGradient>
+              </defs>
+              <circle
+                cx="50"
+                cy="50"
+                fill="transparent"
+                r="40"
+                stroke="#1f1f26"
+                strokeWidth="7"
               />
+              <circle
+                cx="50"
+                cy="50"
+                fill="transparent"
+                r="40"
+                stroke="url(#origGradient)"
+                strokeDasharray={CIRCUMFERENCE}
+                strokeDashoffset={mounted ? origOffset : CIRCUMFERENCE}
+                strokeLinecap="round"
+                strokeWidth="7"
+                style={{
+                  transition: "stroke-dashoffset 1s ease-in-out",
+                }}
+              />
+            </svg>
+            <div className="absolute inset-0 flex flex-col items-center justify-center">
+              <span className="text-2xl font-bold text-[#fca5a5] tracking-tight leading-none">
+                {originalScore.overallScore}
+              </span>
+              <span className="text-xs text-zinc-400 mt-1 font-mono font-medium">/ 100</span>
             </div>
-          ))}
+          </div>
+          <span className="text-xs tracking-wider uppercase font-semibold text-[#f87171] mt-2 font-mono">
+            Original
+          </span>
         </div>
 
-        {/* Critical gaps */}
-        {originalScore.criticalMissingRequirements.length > 0 && (
-          <div className="space-y-2">
-            <p className="text-[11px] font-bold text-muted-foreground/60 uppercase tracking-widest">
-              Critical Gaps
-            </p>
-            <div className="flex flex-wrap gap-1.5">
-              {originalScore.criticalMissingRequirements.map((req) => (
-                <span
-                  key={req}
-                  className="chip bg-red-500/8 text-red-400 border border-red-500/20"
-                >
-                  {req}
+        {/* Transfer Arrow Badge / Delta Pill */}
+        {showBoth && tailoredScore && (
+          <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#16161c] border border-[#26262e] text-[#10b981] text-xs font-semibold self-center -mt-4 font-mono">
+            {improvement !== null && improvement > 0 ? (
+              <TrendingUp className="w-3.5 h-3.5 text-[#10b981]" />
+            ) : improvement !== null && improvement < 0 ? (
+              <TrendingDown className="w-3.5 h-3.5 text-red-400" />
+            ) : (
+              <Minus className="w-3.5 h-3.5 text-gray-400" />
+            )}
+            <span>
+              {improvement !== null && improvement > 0
+                ? `+${improvement}`
+                : improvement ?? 0}{" "}
+              pts
+            </span>
+            <span className="text-zinc-400">→</span>
+          </div>
+        )}
+
+        {/* Tailored Gauge */}
+        {showBoth && tailoredScore && (
+          <div className="flex flex-col items-center">
+            <div className="relative w-24 h-24 flex items-center justify-center">
+              <svg className="w-full h-full -rotate-90 transform" viewBox="0 0 100 100">
+                <defs>
+                  <linearGradient id="tailoredGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#10b981" />
+                    <stop offset="100%" stopColor="#34d399" />
+                  </linearGradient>
+                  <filter id="glowGreen" x="-20%" y="-20%" width="140%" height="140%">
+                    <feDropShadow
+                      dx="0"
+                      dy="0"
+                      stdDeviation="2"
+                      floodColor="#10b981"
+                      floodOpacity="0.45"
+                    />
+                  </filter>
+                </defs>
+                <circle
+                  cx="50"
+                  cy="50"
+                  fill="transparent"
+                  r="40"
+                  stroke="#1f1f26"
+                  strokeWidth="7"
+                />
+                <circle
+                  cx="50"
+                  cy="50"
+                  fill="transparent"
+                  filter="url(#glowGreen)"
+                  r="40"
+                  stroke="url(#tailoredGradient)"
+                  strokeDasharray={CIRCUMFERENCE}
+                  strokeDashoffset={mounted ? tailoredOffset : CIRCUMFERENCE}
+                  strokeLinecap="round"
+                  strokeWidth="7"
+                  style={{
+                    transition: "stroke-dashoffset 1s ease-in-out",
+                  }}
+                />
+              </svg>
+              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <span className="text-2xl font-bold text-[#34d399] tracking-tight leading-none">
+                  {tailoredScore.overallScore}
                 </span>
-              ))}
+                <span className="text-xs text-emerald-400/90 mt-1 font-mono font-medium">/ 100</span>
+              </div>
             </div>
+            <span className="text-xs tracking-wider uppercase font-semibold text-emerald-400 mt-2 font-mono">
+              {tailoredLabel}
+            </span>
           </div>
         )}
       </div>
+
+      {/* ── Metric Description Paragraph ─────────────────────────── */}
+      <p className="text-sm text-zinc-300 leading-relaxed text-center px-4 max-w-xl mx-auto">
+        {(showBoth && tailoredScore?.explanation) || originalScore.explanation}
+      </p>
+
+      {/* ── Category Progress Grid ────────────────────────────────── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1">
+        {/* Skills */}
+        <div className="bg-[#121217] border border-[#23232b] rounded-lg p-3">
+          <div className="flex justify-between items-center mb-1.5 font-mono">
+            <span className="text-xs tracking-wider uppercase font-medium text-zinc-400">
+              Skills
+            </span>
+            <span className="text-xs sm:text-sm font-semibold text-white">
+              {skillsVal}
+              {showBoth && skillsDelta !== 0 && (
+                <span
+                  className={cn(
+                    "font-medium text-xs ml-1",
+                    skillsDelta > 0 ? "text-[#10b981]" : "text-red-400"
+                  )}
+                >
+                  {skillsDelta > 0 ? `+${skillsDelta}` : skillsDelta}
+                </span>
+              )}
+            </span>
+          </div>
+          <div className="w-full bg-[#202028] h-1.5 rounded-full overflow-hidden">
+            <div
+              className={cn(
+                "h-full rounded-full transition-all duration-700",
+                skillsVal >= 70
+                  ? "bg-[#10b981]"
+                  : skillsVal >= 50
+                  ? "bg-amber-500"
+                  : "bg-red-500"
+              )}
+              style={{ width: `${Math.min(Math.max(skillsVal, 0), 100)}%` }}
+            />
+          </div>
+        </div>
+
+        {/* Responsibilities */}
+        <div className="bg-[#121217] border border-[#23232b] rounded-lg p-3">
+          <div className="flex justify-between items-center mb-1.5 font-mono">
+            <span className="text-xs tracking-wider uppercase font-medium text-zinc-400 truncate">
+              Responsibilities
+            </span>
+            <span className="text-xs sm:text-sm font-semibold text-white">
+              {respVal}
+              {showBoth && respDelta !== 0 && (
+                <span
+                  className={cn(
+                    "font-medium text-xs ml-1",
+                    respDelta > 0 ? "text-[#10b981]" : "text-red-400"
+                  )}
+                >
+                  {respDelta > 0 ? `+${respDelta}` : respDelta}
+                </span>
+              )}
+            </span>
+          </div>
+          <div className="w-full bg-[#202028] h-1.5 rounded-full overflow-hidden">
+            <div
+              className={cn(
+                "h-full rounded-full transition-all duration-700",
+                respVal >= 70
+                  ? "bg-[#10b981]"
+                  : respVal >= 50
+                  ? "bg-amber-500"
+                  : "bg-red-500"
+              )}
+              style={{ width: `${Math.min(Math.max(respVal, 0), 100)}%` }}
+            />
+          </div>
+        </div>
+
+        {/* Keywords */}
+        <div className="bg-[#121217] border border-[#23232b] rounded-lg p-3">
+          <div className="flex justify-between items-center mb-1.5 font-mono">
+            <span className="text-xs tracking-wider uppercase font-medium text-zinc-400">
+              Keywords
+            </span>
+            <span className="text-xs sm:text-sm font-semibold text-white">
+              {kwVal}
+              {showBoth && kwDelta !== 0 && (
+                <span
+                  className={cn(
+                    "font-medium text-xs ml-1",
+                    kwDelta > 0 ? "text-sky-400" : "text-red-400"
+                  )}
+                >
+                  {kwDelta > 0 ? `+${kwDelta}` : kwDelta}
+                </span>
+              )}
+            </span>
+          </div>
+          <div className="w-full bg-[#202028] h-1.5 rounded-full overflow-hidden">
+            <div
+              className="bg-sky-400 h-full rounded-full transition-all duration-700"
+              style={{ width: `${Math.min(Math.max(kwVal, 0), 100)}%` }}
+            />
+          </div>
+        </div>
+
+        {/* Seniority */}
+        <div className="bg-[#121217] border border-[#23232b] rounded-lg p-3">
+          <div className="flex justify-between items-center mb-1.5 font-mono">
+            <span className="text-xs tracking-wider uppercase font-medium text-zinc-400">
+              Seniority
+            </span>
+            <span className="text-xs sm:text-sm font-semibold text-emerald-400">
+              {senVal}
+              {showBoth && senDelta !== 0 && (
+                <span
+                  className={cn(
+                    "font-medium text-xs ml-1",
+                    senDelta > 0 ? "text-emerald-400" : "text-red-400"
+                  )}
+                >
+                  {senDelta > 0 ? `+${senDelta}` : senDelta}
+                </span>
+              )}
+            </span>
+          </div>
+          <div className="w-full bg-[#202028] h-1.5 rounded-full overflow-hidden">
+            <div
+              className="bg-emerald-500 h-full rounded-full transition-all duration-700"
+              style={{ width: `${Math.min(Math.max(senVal, 0), 100)}%` }}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* ── Critical Gaps Pills ───────────────────────────────────── */}
+      {originalScore.criticalMissingRequirements.length > 0 && (
+        <div className="pt-1">
+          <div className="text-xs tracking-wider uppercase font-medium text-zinc-400 mb-2 font-mono">
+            Critical Gaps
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {originalScore.criticalMissingRequirements.map((gap) => (
+              <span
+                key={gap}
+                className="px-2.5 py-1 rounded text-xs font-medium bg-[#241315] text-[#f87171] border border-[#401c20] font-mono"
+              >
+                {gap}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
-

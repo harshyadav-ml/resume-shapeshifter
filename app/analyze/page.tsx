@@ -35,7 +35,7 @@ export default function AnalyzePage() {
 
   if (isParsing) {
     return (
-      <main className="min-h-screen max-w-2xl mx-auto px-6 py-10 page-enter">
+      <main className="min-h-screen max-w-2xl mx-auto px-6 sm:px-8 md:px-10 py-10 page-enter">
         <div className="mb-8">
           <div className="flex items-center gap-2 text-sm text-primary font-semibold mb-2">
             <ScanSearch className="h-4 w-4" />
@@ -55,7 +55,7 @@ export default function AnalyzePage() {
 
   if (state.status === "error" && state.errors.length > 0) {
     return (
-      <main className="min-h-screen max-w-5xl mx-auto px-6 py-10 page-enter">
+      <main className="min-h-screen max-w-5xl mx-auto px-6 sm:px-8 md:px-10 py-10 page-enter">
         <div className="mb-8">
           <div className="flex items-center gap-2 text-sm text-primary font-semibold mb-2">
             <ScanSearch className="h-4 w-4" />
@@ -102,7 +102,7 @@ export default function AnalyzePage() {
   const isPartial = state.status === "partial";
 
   return (
-    <main className="min-h-screen max-w-6xl mx-auto px-6 py-10 page-enter">
+    <main className="min-h-screen max-w-6xl mx-auto px-6 sm:px-8 md:px-10 py-10 page-enter">
       {/* Header */}
       <div className="mb-8">
         <div className="flex items-center gap-2 text-sm text-primary font-semibold mb-2">

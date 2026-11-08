@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { TailoredExperienceEntry } from "@/types";
 import BulletCard from "./BulletCard";
-import { Building2, ChevronDown, ChevronUp } from "lucide-react";
+import { Building2, ChevronDown, ChevronUp, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAppContext } from "@/lib/context";
 
@@ -23,7 +23,17 @@ export default function SideBySideDiff({ experience, className }: SideBySideDiff
     setCollapsed((prev) => ({ ...prev, [idx]: !prev[idx] }));
 
   const handleConfirm = (ei: number, bi: number, confirmed: boolean) => {
-    dispatch({ type: "CONFIRM_BULLET", payload: { experienceIndex: ei, bulletIndex: bi, confirmed } });
+    dispatch({
+      type: "CONFIRM_BULLET",
+      payload: { experienceIndex: ei, bulletIndex: bi, confirmed },
+    });
+  };
+
+  const handleEdit = (ei: number, bi: number, tailored: string) => {
+    dispatch({
+      type: "EDIT_BULLET",
+      payload: { experienceIndex: ei, bulletIndex: bi, tailored },
+    });
   };
 
   const filteredExperience = experience.map((exp) => ({
@@ -45,20 +55,25 @@ export default function SideBySideDiff({ experience, className }: SideBySideDiff
   );
 
   return (
-    <div className={cn("space-y-6", className)}>
-      {/* Summary bar */}
-      <div className="flex flex-wrap items-center gap-3 bg-muted/40 rounded-xl px-4 py-3 border border-border/50">
-        <span className="text-sm font-medium text-foreground">
-          {totalChanged} bullets changed
-        </span>
-        {totalRisks > 0 && (
-          <span className="chip text-[11px] bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/30">
-            ⚠️ {totalRisks} risk flag{totalRisks > 1 ? "s" : ""}
+    <div className={cn("space-y-4", className)}>
+      {/* ── Filter Tabs Bar ───────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-800/80 pb-3.5">
+        {/* Count Badge Tabs */}
+        <div className="flex items-center space-x-2.5">
+          <span className="px-3 py-1 rounded-full text-xs sm:text-sm font-medium bg-[#1c1f28] text-white border border-gray-700/80 shadow-sm flex items-center space-x-1.5 font-mono">
+            <span>{totalChanged} bullets changed</span>
           </span>
-        )}
-        {/* Filter controls */}
-        <div className="ml-auto flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">Show:</span>
+          {totalRisks > 0 && (
+            <span className="px-3 py-1 rounded-full text-xs sm:text-sm font-medium bg-amber-950/40 text-amber-300 border border-amber-900/60 flex items-center space-x-1.5 font-mono">
+              <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+              <span>{totalRisks} risk flag{totalRisks > 1 ? "s" : ""}</span>
+            </span>
+          )}
+        </div>
+
+        {/* Filter Selector */}
+        <div className="flex items-center space-x-1 text-xs sm:text-sm">
+          <span className="text-zinc-400 mr-2 font-mono text-xs font-medium">Show:</span>
           {(["all", "high", "risks"] as ConfidenceFilter[]).map((f) => (
             <button
               key={f}
@@ -66,10 +81,10 @@ export default function SideBySideDiff({ experience, className }: SideBySideDiff
               id={`filter-${f}`}
               onClick={() => setFilter(f)}
               className={cn(
-                "text-xs font-semibold px-2.5 py-1 rounded-lg border transition-all",
+                "px-3 py-1 rounded-full text-xs font-mono font-medium transition-all",
                 filter === f
-                  ? "bg-primary text-primary-foreground border-primary"
-                  : "bg-background text-muted-foreground border-border hover:border-primary/50"
+                  ? "bg-white text-gray-950 font-bold"
+                  : "text-zinc-400 hover:text-white"
               )}
             >
               {f === "all" ? "All" : f === "high" ? "High only" : "Risks only"}
@@ -78,61 +93,64 @@ export default function SideBySideDiff({ experience, className }: SideBySideDiff
         </div>
       </div>
 
-      {/* Experience groups */}
-      {filteredExperience.map((exp, ei) => {
-        if (exp.bullets.length === 0) return null;
-        const isCollapsed = collapsed[ei];
+      {/* ── Experience Groups ─────────────────────────────────────── */}
+      <div className="space-y-5">
+        {filteredExperience.map((exp, ei) => {
+          if (exp.bullets.length === 0) return null;
+          const isCollapsed = collapsed[ei];
 
-        return (
-          <div
-            key={`${exp.company}-${exp.title}`}
-            className="rounded-2xl border bg-card/50 overflow-hidden"
-          >
-            {/* Company header */}
-            <button
-              type="button"
-              onClick={() => toggleCollapse(ei)}
-              className="w-full flex items-center justify-between gap-3 px-5 py-4 hover:bg-muted/30 transition-colors"
-              aria-expanded={!isCollapsed}
-            >
-              <div className="flex items-center gap-3">
-                <div className="h-9 w-9 rounded-xl bg-primary/10 flex items-center justify-center">
-                  <Building2 className="h-4 w-4 text-primary" />
+          return (
+            <div key={`${exp.company}-${exp.title}`} className="space-y-3">
+              {/* Accordion Header: Company & Role */}
+              <button
+                type="button"
+                onClick={() => toggleCollapse(ei)}
+                className="w-full flex items-center justify-between py-1.5 text-zinc-300 hover:text-white transition-colors group"
+                aria-expanded={!isCollapsed}
+              >
+                <div className="flex items-center space-x-2.5">
+                  <div className="w-7 h-7 rounded bg-[#1a1c24] flex items-center justify-center border border-gray-800 text-zinc-400 group-hover:text-white group-hover:border-gray-700 transition-colors">
+                    <Building2 className="w-4 h-4" />
+                  </div>
+                  <div className="text-left">
+                    <span className="text-white font-semibold text-sm sm:text-base">
+                      {exp.company}
+                    </span>
+                    <span className="text-zinc-400 ml-2 text-xs sm:text-sm">
+                      {exp.title}
+                    </span>
+                  </div>
                 </div>
-                <div className="text-left">
-                  <p className="font-semibold text-sm">{exp.company}</p>
-                  <p className="text-xs text-muted-foreground">{exp.title}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground">
-                  {exp.bullets.length} bullet{exp.bullets.length > 1 ? "s" : ""}
-                </span>
-                {isCollapsed ? (
-                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                ) : (
-                  <ChevronUp className="h-4 w-4 text-muted-foreground" />
-                )}
-              </div>
-            </button>
 
-            {/* Bullets */}
-            {!isCollapsed && (
-              <div className="px-4 pb-4 space-y-3 border-t border-border/50 pt-4">
-                {exp.bullets.map((bullet, bi) => (
-                  <BulletCard
-                    key={bi}
-                    bullet={bullet}
-                    experienceIndex={ei}
-                    bulletIndex={bi}
-                    onConfirm={handleConfirm}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        );
-      })}
+                <div className="flex items-center space-x-2 text-xs font-mono font-medium text-zinc-300">
+                  <span>{exp.bullets.length} bullet{exp.bullets.length > 1 ? "s" : ""}</span>
+                  {isCollapsed ? (
+                    <ChevronDown className="w-4 h-4 text-zinc-400" />
+                  ) : (
+                    <ChevronUp className="w-4 h-4 text-zinc-400" />
+                  )}
+                </div>
+              </button>
+
+              {/* Bullet Cards */}
+              {!isCollapsed && (
+                <div className="space-y-3">
+                  {exp.bullets.map((bullet, bi) => (
+                    <BulletCard
+                      key={bi}
+                      bullet={bullet}
+                      experienceIndex={ei}
+                      bulletIndex={bi}
+                      onConfirm={handleConfirm}
+                      onEdit={handleEdit}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

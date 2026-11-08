@@ -3,15 +3,26 @@
 import { useState } from "react";
 import { RewrittenBullet } from "@/types";
 import ConfidenceBadge from "./ConfidenceBadge";
-import { ChevronDown, ChevronUp, CheckCheck, RotateCcw, AlertTriangle, Lightbulb } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronUp,
+  Check,
+  RotateCcw,
+  AlertTriangle,
+  Lightbulb,
+  Pencil,
+  Save,
+  X,
+  Copy,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
-/* ── Props (UNCHANGED) ───────────────────────────────────────── */
 interface BulletCardProps {
   bullet: RewrittenBullet;
   experienceIndex: number;
   bulletIndex: number;
   onConfirm?: (ei: number, bi: number, confirmed: boolean) => void;
+  onEdit?: (ei: number, bi: number, tailored: string) => void;
   className?: string;
 }
 
@@ -20,204 +31,261 @@ export default function BulletCard({
   experienceIndex,
   bulletIndex,
   onConfirm,
+  onEdit,
   className,
 }: BulletCardProps) {
   const [showReason, setShowReason] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedText, setEditedText] = useState(bullet.tailored);
+  const [copied, setCopied] = useState(false);
+
   const isUnchanged = bullet.original === bullet.tailored;
   const hasRisk = !!bullet.riskFlag;
+
+  const handleCopyBullet = async () => {
+    try {
+      await navigator.clipboard.writeText(bullet.tailored);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch (err) {
+      console.error("Failed to copy bullet:", err);
+    }
+  };
+
+  const handleSaveEdit = () => {
+    if (editedText.trim().length > 0 && onEdit) {
+      onEdit(experienceIndex, bulletIndex, editedText.trim());
+    }
+    setIsEditing(false);
+  };
+
+  const handleCancelEdit = () => {
+    setEditedText(bullet.tailored);
+    setIsEditing(false);
+  };
 
   return (
     <div
       id={`bullet-${experienceIndex}-${bulletIndex}`}
       className={cn(
-        "relative rounded-2xl overflow-hidden transition-all duration-200 group/card",
-        /* Base charcoal surface */
-        "bg-[#141418] border",
-        /* State variants */
-        isUnchanged
-          ? "border-white/[0.05] opacity-50"
-          : hasRisk
-          ? "border-blue-500/30 bullet-card-risk"
-          : "border-white/[0.08] bullet-card-changed",
-        /* Hover lift */
-        !isUnchanged && "hover:border-white/[0.14] hover:-translate-y-px",
+        "bg-[#121318] border border-[#20232c] rounded-xl p-4 space-y-4 shadow-sm transition-all duration-200",
+        isUnchanged && "opacity-60 border-gray-800/40",
+        hasRisk && "border-amber-900/40 hover:border-amber-800/60",
+        !isUnchanged && !hasRisk && "hover:border-[#2f3545]",
         className
       )}
     >
-      {/* Top highlight line */}
-      {!isUnchanged && (
-        <div className={cn(
-          "absolute inset-x-0 top-0 h-px",
-          hasRisk
-            ? "bg-gradient-to-r from-transparent via-blue-500/30 to-transparent"
-            : "bg-gradient-to-r from-transparent via-white/10 to-transparent"
-        )} />
-      )}
-
-      <div className="p-4 space-y-4">
-        {/* ── Header row ────────────────────────────────────────── */}
-        <div className="flex items-center justify-between gap-3 flex-wrap">
+      {/* ── Card Header Badges ───────────────────────────────────── */}
+      <div className="flex items-center justify-between border-b border-gray-800/60 pb-3">
+        <div className="flex items-center space-x-2">
           <ConfidenceBadge confidence={bullet.confidence} riskFlag={bullet.riskFlag} />
+        </div>
+
+        <div className="flex items-center space-x-2">
           {!isUnchanged ? (
-            <span className={cn(
-              "text-[10px] font-mono font-semibold tracking-widest uppercase px-2 py-0.5 rounded-full border",
-              hasRisk
-                ? "text-blue-400 border-blue-500/25 bg-blue-500/[0.05]"
-                : "text-zinc-400 border-white/10 bg-white/[0.03]"
-            )}>
-              {hasRisk ? "⚠ Modified" : "◦ Modified"}
+            <span className="text-xs font-semibold text-emerald-400 flex items-center space-x-1.5 font-mono">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>
+              <span>MODIFIED</span>
             </span>
           ) : (
-            <span className="text-[10px] text-zinc-600 tracking-widest uppercase font-mono">
-              Unchanged
+            <span className="text-xs font-medium text-zinc-400 font-mono">
+              UNCHANGED
             </span>
           )}
         </div>
+      </div>
 
-        {/* ── Side-by-side diff ──────────────────────────────────── */}
-        {isUnchanged ? (
-          /* Unchanged — single column, muted zinc */
-          <p className="text-sm leading-relaxed text-zinc-600">
-            {bullet.original}
-          </p>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {/* Original column — muted, struck through */}
-            <div className="space-y-1.5">
-              <div className="flex items-center gap-1.5">
-                <div className="h-1.5 w-1.5 rounded-full bg-zinc-600" />
-                <span className="text-[10px] font-mono font-semibold tracking-widest uppercase text-zinc-600">
-                  Before
-                </span>
-              </div>
-              <div className="bg-[#0c0c0e] border border-white/[0.05] p-3 rounded-xl">
-                <p className="text-[13px] leading-relaxed text-zinc-600 line-through decoration-zinc-700 decoration-1">
-                  {bullet.original}
-                </p>
-              </div>
+      {/* ── Diff Columns Side-by-Side ────────────────────────────── */}
+      {isUnchanged ? (
+        <div className="p-3.5 bg-[#0e1014]/40 rounded-lg border border-gray-800/40 text-zinc-300 leading-relaxed text-sm sm:text-base font-sans">
+          {bullet.original}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm sm:text-base font-sans">
+          {/* BEFORE Column */}
+          <div className="space-y-1.5 bg-[#0e1014]/60 p-3.5 rounded-lg border border-gray-800/50">
+            <div className="flex items-center space-x-1.5 text-xs font-semibold uppercase text-zinc-400 font-mono">
+              <span className="w-2 h-2 rounded-full bg-zinc-500"></span>
+              <span>BEFORE</span>
             </div>
-
-            {/* Tailored column — crisp white */}
-            <div className="space-y-1.5">
-              <div className="flex items-center gap-1.5">
-                <div className={cn(
-                  "h-1.5 w-1.5 rounded-full",
-                  hasRisk ? "bg-blue-400" : "bg-zinc-300"
-                )} />
-                <span className={cn(
-                  "text-[10px] font-mono font-semibold tracking-widest uppercase",
-                  hasRisk ? "text-blue-400" : "text-zinc-400"
-                )}>
-                  After
-                </span>
-              </div>
-              <div className={cn(
-                "p-3 rounded-xl border",
-                hasRisk
-                  ? "bg-blue-500/[0.04] border-blue-500/20"
-                  : "bg-white/[0.03] border-white/[0.08]"
-              )}>
-                <p className="text-[13px] leading-relaxed font-medium text-zinc-100">
-                  {bullet.tailored}
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ── Keyword chips — outline-only pills ─────────────────── */}
-        {bullet.keywordsAddressed.length > 0 && !isUnchanged && (
-          <div className="flex flex-wrap gap-1.5 pt-0.5">
-            {bullet.keywordsAddressed.map((kw) => (
-              <span
-                key={kw}
-                className={cn(
-                  "chip",
-                  hasRisk
-                    ? "text-blue-400 border border-blue-500/25"
-                    : "text-zinc-400 border border-white/10"
-                )}
-              >
-                {kw}
-              </span>
-            ))}
-          </div>
-        )}
-
-        {/* ── Risk warning — sleek blue accent ─────────────── */}
-        {hasRisk && (
-          <div className="flex items-start gap-2.5 rounded-xl bg-blue-500/[0.04] border border-blue-500/25 px-3.5 py-3">
-            <AlertTriangle className="h-4 w-4 text-blue-400 shrink-0 mt-0.5" />
-            <p className="text-xs text-blue-200/80 leading-relaxed">
-              <span className="font-semibold text-blue-400">Verify: </span>
-              {bullet.riskFlag}
+            <p className="text-zinc-400 leading-relaxed font-sans text-sm sm:text-base line-through decoration-zinc-700 decoration-1">
+              {bullet.original}
             </p>
           </div>
-        )}
 
-        {/* ── Change reason toggle ───────────────────────────────── */}
-        {!isUnchanged && (
-          <div className="space-y-2">
-            <button
-              type="button"
-              onClick={() => setShowReason((v) => !v)}
-              className="flex items-center gap-1.5 text-[11px] font-mono font-medium text-zinc-600 hover:text-zinc-400 transition-colors group/btn"
-              aria-expanded={showReason}
-            >
-              <Lightbulb className="h-3 w-3 text-zinc-600 group-hover/btn:text-zinc-400 transition-colors" />
-              {showReason ? "Hide" : "Show"} change reasoning
-              {showReason ? (
-                <ChevronUp className="h-3 w-3 ml-0.5" />
-              ) : (
-                <ChevronDown className="h-3 w-3 ml-0.5" />
-              )}
-            </button>
-
-            {showReason && bullet.changeReason && (
-              <div className="bg-[#0c0c0e] border border-white/[0.05] rounded-lg px-3.5 py-3 text-xs text-zinc-500 leading-relaxed animate-fade-in">
-                {bullet.changeReason}
+          {/* AFTER Column */}
+          <div className="space-y-1.5 bg-[#10141b]/70 p-3.5 rounded-lg border border-teal-900/30">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-1.5 text-xs font-semibold uppercase text-teal-400 font-mono">
+                <span className="w-2 h-2 rounded-full bg-teal-400"></span>
+                <span>AFTER</span>
               </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleCopyBullet}
+                  className={cn(
+                    "flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono font-medium transition-all duration-150 ease-out shadow-sm",
+                    copied
+                      ? "bg-zinc-800 border border-zinc-600 text-zinc-200"
+                      : "bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-700/60"
+                  )}
+                  title="Copy tailored bullet text to clipboard"
+                  aria-label="Copy tailored bullet text"
+                >
+                  {copied ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Copied!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5 text-zinc-400" />
+                      <span>Copy</span>
+                    </>
+                  )}
+                </button>
+                {!isEditing && onEdit && (
+                  <button
+                    type="button"
+                    onClick={() => setIsEditing(true)}
+                    className="flex items-center gap-1 text-xs text-zinc-300 hover:text-white transition-colors font-mono font-medium px-2 py-1"
+                    title="Manually edit tailored bullet"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                    <span>Edit</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {isEditing ? (
+              <div className="space-y-2 pt-1">
+                <textarea
+                  value={editedText}
+                  onChange={(e) => setEditedText(e.target.value)}
+                  className="w-full bg-[#0c0d10] border border-teal-500/40 rounded-lg p-2.5 text-sm text-zinc-100 font-sans focus:outline-none focus:ring-1 focus:ring-teal-400 resize-none min-h-[90px] leading-relaxed"
+                  aria-label="Edit tailored bullet text"
+                />
+                <div className="flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={handleCancelEdit}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium bg-gray-800 text-zinc-300 hover:text-white transition"
+                  >
+                    <X className="w-3.5 h-3.5" /> Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveEdit}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs sm:text-sm bg-teal-500 text-gray-950 font-bold hover:bg-teal-400 transition"
+                  >
+                    <Save className="w-3.5 h-3.5" /> Save
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <p className="text-zinc-100 leading-relaxed font-sans text-sm sm:text-base">
+                {bullet.tailored}
+              </p>
             )}
           </div>
-        )}
+        </div>
+      )}
 
-        {/* ── Accept / Revert ────────────────────────────────────── */}
-        {!isUnchanged && onConfirm && (
-          <div className="flex items-center gap-2 pt-1 border-t border-white/[0.06]">
-            {/* Accept */}
-            <button
-              type="button"
-              id={`accept-bullet-${experienceIndex}-${bulletIndex}`}
-              onClick={() => onConfirm(experienceIndex, bulletIndex, true)}
-              className={cn(
-                "flex items-center gap-1.5 text-xs font-semibold px-3.5 py-2 rounded-lg transition-all duration-150",
-                bullet.confirmed === true
-                  ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
-                  : "bg-emerald-500/[0.06] text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/[0.12] hover:border-emerald-500/30"
-              )}
+      {/* ── Tags & Keywords ──────────────────────────────────────── */}
+      {bullet.keywordsAddressed.length > 0 && !isUnchanged && (
+        <div className="flex flex-wrap items-center gap-2 pt-1">
+          {bullet.keywordsAddressed.map((kw) => (
+            <span
+              key={kw}
+              className="text-xs font-mono font-medium px-2.5 py-1 rounded-md bg-[#1a1d26] text-zinc-200 border border-zinc-700/60"
             >
-              <CheckCheck className="h-3.5 w-3.5" />
-              {bullet.confirmed === true ? "Accepted" : "Accept"}
-            </button>
+              {kw}
+            </span>
+          ))}
+        </div>
+      )}
 
-            {/* Revert */}
-            <button
-              type="button"
-              id={`revert-bullet-${experienceIndex}-${bulletIndex}`}
-              onClick={() => onConfirm(experienceIndex, bulletIndex, false)}
-              className={cn(
-                "flex items-center gap-1.5 text-xs font-semibold px-3.5 py-2 rounded-lg transition-all duration-150",
-                bullet.confirmed === false && bullet.confirmed !== undefined
-                  ? "bg-white/[0.08] text-zinc-300 border border-white/10"
-                  : "bg-white/[0.02] text-zinc-500 border border-white/[0.06] hover:bg-white/[0.05] hover:text-zinc-400"
-              )}
-            >
-              <RotateCcw className="h-3.5 w-3.5" />
-              {bullet.confirmed === false ? "Reverted" : "Revert"}
-            </button>
+      {/* ── Risk Warning Callout ─────────────────────────────────── */}
+      {hasRisk && (
+        <div className="flex items-start gap-2.5 rounded-lg bg-amber-950/20 border border-amber-800/30 px-3.5 py-2.5 text-sm text-amber-200/90 font-sans">
+          <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+          <p className="leading-relaxed">
+            <span className="font-semibold text-amber-400">Verify: </span>
+            {bullet.riskFlag}
+          </p>
+        </div>
+      )}
+
+      {/* ── Reasoning & Actions Row ──────────────────────────────── */}
+      {!isUnchanged && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2.5 border-t border-gray-800/60">
+          {/* Reason Toggle */}
+          <div>
+            {bullet.changeReason && (
+              <button
+                type="button"
+                onClick={() => setShowReason((v) => !v)}
+                className="text-xs sm:text-sm text-zinc-300 hover:text-white flex items-center space-x-1.5 transition font-mono font-medium"
+                aria-expanded={showReason}
+              >
+                <Lightbulb className="w-4 h-4 text-zinc-400" />
+                <span>{showReason ? "Hide" : "Show"} change reasoning</span>
+                {showReason ? (
+                  <ChevronUp className="w-3.5 h-3.5 text-zinc-400" />
+                ) : (
+                  <ChevronDown className="w-3.5 h-3.5 text-zinc-400" />
+                )}
+              </button>
+            )}
           </div>
-        )}
-      </div>
+
+          {/* Accept / Revert Actions */}
+          {onConfirm && (
+            <div className="flex items-center space-x-2.5">
+              {/* Accept */}
+              <button
+                type="button"
+                id={`accept-bullet-${experienceIndex}-${bulletIndex}`}
+                onClick={() => onConfirm(experienceIndex, bulletIndex, true)}
+                className={cn(
+                  "flex items-center space-x-1.5 px-3.5 py-1.5 rounded-md text-xs sm:text-sm font-semibold transition-all duration-150 shadow-sm",
+                  bullet.confirmed === true
+                    ? "bg-zinc-800 text-emerald-400 border border-emerald-500/40"
+                    : "bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white border border-zinc-700/60"
+                )}
+              >
+                <Check className="w-4 h-4 text-emerald-400 stroke-[2.5]" />
+                <span>{bullet.confirmed === true ? "Accepted" : "Accept"}</span>
+              </button>
+
+              {/* Revert */}
+              <button
+                type="button"
+                id={`revert-bullet-${experienceIndex}-${bulletIndex}`}
+                onClick={() => onConfirm(experienceIndex, bulletIndex, false)}
+                className={cn(
+                  "flex items-center space-x-1.5 px-3.5 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-all duration-150",
+                  bullet.confirmed === false
+                    ? "bg-zinc-800 text-zinc-100 border border-zinc-500"
+                    : "bg-zinc-900 text-zinc-400 hover:text-white hover:bg-zinc-800 border border-zinc-700/60"
+                )}
+              >
+                <RotateCcw className="w-3.5 h-3.5 text-zinc-400 stroke-2" />
+                <span>{bullet.confirmed === false ? "Reverted" : "Revert"}</span>
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Expanded Reasoning Box */}
+      {showReason && bullet.changeReason && !isUnchanged && (
+        <div className="bg-[#0e1014] border border-gray-800/80 rounded-lg p-3.5 text-xs sm:text-sm text-zinc-300 leading-relaxed font-mono">
+          {bullet.changeReason}
+        </div>
+      )}
     </div>
   );
 }

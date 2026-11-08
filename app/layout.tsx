@@ -44,35 +44,35 @@ export default function RootLayout({
       <body className="antialiased font-sans">
         <AppProvider>
           {/* ── Global Nav ─────────────────────────────────────────── */}
-          <nav className="sticky top-0 z-50 border-b border-white/[0.06] bg-[#0c0c0e]/90 backdrop-blur-xl">
+          <nav className="sticky top-0 z-50 border-b border-[#23232b] bg-[#070709]/95 backdrop-blur-xl">
             {/* Top hairline accent */}
-            <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+            <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#41F0B1]/20 to-transparent" />
 
-            <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
+            <div className="max-w-7xl mx-auto w-full px-6 sm:px-8 md:px-10 lg:px-12 h-16 flex items-center justify-between">
               {/* Wordmark */}
               <Link
                 href="/"
-                className="flex items-center hover:opacity-80 transition-opacity"
+                className="flex items-center pl-2 sm:pl-4 hover:opacity-85 transition-opacity select-none"
                 aria-label="Resume Shapeshifter Home"
               >
-                <span className="font-display font-bold text-sm tracking-tight text-white">
+                <span className="font-display font-bold text-base sm:text-lg tracking-tight text-white whitespace-nowrap">
                   Resume Shapeshifter
                 </span>
               </Link>
 
               {/* Nav links */}
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-2 pr-2 sm:pr-4">
                 <Link
                   href="/history"
                   id="nav-history"
-                  className="text-[13px] text-zinc-500 hover:text-zinc-200 transition-colors font-medium px-3 py-1.5 rounded-lg hover:bg-white/5"
+                  className="text-xs sm:text-sm text-zinc-400 hover:text-white transition-colors font-medium px-3.5 py-2 rounded-lg hover:bg-white/5"
                 >
                   History
                 </Link>
                 <Link
                   href="/input"
                   id="nav-get-started"
-                  className="text-[13px] font-semibold text-zinc-950 bg-zinc-100 hover:bg-white transition-all px-4 py-1.5 rounded-full"
+                  className="text-xs sm:text-sm font-semibold text-zinc-950 bg-zinc-100 hover:bg-white transition-all px-4 py-2 rounded-full shadow-sm"
                 >
                   Get Started
                 </Link>

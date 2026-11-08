@@ -123,7 +123,7 @@ Or drag & drop a .txt, .pdf, or .docx file above."
       </div>
 
       {/* Upload hint */}
-      <p className="text-[11px] text-muted-foreground">
+      <p className="text-xs text-muted-foreground">
         Accepts .txt, .pdf, .docx — PDF/DOCX parsing via AI backend in Phase 2.
       </p>
     </div>

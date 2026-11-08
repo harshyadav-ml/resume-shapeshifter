@@ -190,4 +190,5 @@ export type AppAction =
   | { type: "SET_ERRORS"; payload: string[] }
   | { type: "RESET" }
   | { type: "CONFIRM_BULLET"; payload: { experienceIndex: number; bulletIndex: number; confirmed: boolean } }
-  | { type: "REVERT_BULLET"; payload: { experienceIndex: number; bulletIndex: number } };
+  | { type: "REVERT_BULLET"; payload: { experienceIndex: number; bulletIndex: number } }
+  | { type: "EDIT_BULLET"; payload: { experienceIndex: number; bulletIndex: number; tailored: string } };

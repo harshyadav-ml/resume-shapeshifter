@@ -59,7 +59,7 @@ export default function JDInput({ value, onChange, className }: JDInputProps) {
           className="flex-1 text-xs bg-transparent outline-none placeholder:text-muted-foreground/60 text-muted-foreground cursor-not-allowed"
           aria-label="Job posting URL (coming in Phase 2)"
         />
-        <span className="text-[10px] font-semibold text-muted-foreground/60 px-1.5 py-0.5 rounded-md bg-muted/60 border border-border/40 whitespace-nowrap">
+        <span className="text-xs font-semibold text-muted-foreground/80 px-2 py-0.5 rounded-md bg-muted/60 border border-border/40 whitespace-nowrap">
           Phase 2
         </span>
       </div>
