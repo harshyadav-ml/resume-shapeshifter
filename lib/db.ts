@@ -123,3 +123,4 @@ export const db: DbClient = new Proxy(
 );
 
 export { getDb };
+
