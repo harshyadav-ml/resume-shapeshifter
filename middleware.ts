@@ -62,3 +62,4 @@ export const config = {
   // Run middleware only on API routes — skips static files and pages
   matcher: "/api/:path*",
 };
+
