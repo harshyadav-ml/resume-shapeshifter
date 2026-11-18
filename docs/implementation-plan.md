@@ -896,3 +896,4 @@ flowchart TB
 ---
 
 *This implementation plan maps directly to `docs/architecture.md`. Each phase builds on the previous with no dead-end work. Priority is always a working vertical slice.*
+
