@@ -165,3 +165,4 @@ Resume Shapeshifter is designed around a strict truthfulness constraint:
 ## Disclaimer
 
 All AI-generated suggestions must be verified for accuracy before submitting to an employer. Never include experience, certifications, or metrics that don't reflect your actual background. Resume Shapeshifter is a drafting tool, not a source of truth.
+
