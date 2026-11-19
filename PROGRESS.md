@@ -43,3 +43,4 @@ Tracking the core development milestones across all 5 phases of Resume Shapeshif
 - Created `/api/tailor-run` orchestration route coordinating the complete pipeline.
 - Added sample demo fixtures (`public/sample-jd.txt`, `public/sample-resume.txt`).
 - Conducted full v1 polish, dependency cleanups, and git sanitization.
+
