@@ -48,3 +48,4 @@ export function sanitizeFilename(name: string): string {
     .replace(/-{2,}/g, "-")            // collapse consecutive hyphens
     .replace(/^-+|-+$/g, "");          // trim leading/trailing hyphens
 }
+
